@@ -1,0 +1,150 @@
+{
+  "app": {
+    "name": "Paperless-onS",
+    "description": "KI-gestützte Dokumentenanalyse für Paperless-NGX"
+  },
+  "placeholders": {
+    "filename": {
+      "description": "Original-Dateiname des Dokuments",
+      "example": "rechnung_2024_001.pdf"
+    },
+    "current_title": {
+      "description": "Aktueller Titel aus Paperless-NGX (oder 'Nicht gesetzt')",
+      "example": "Rechnung von ACME GmbH"
+    },
+    "extracted_text": {
+      "description": "Von Paperless-NGX OCR extrahierter Text (begrenzt durch max_text_length Einstellung)",
+      "example": "Rechnung\\nDatum: 15.01.2024\\nBetrag: 1.500,00 €..."
+    },
+    "text_length": {
+      "description": "Gesamtlänge des von Paperless-NGX extrahierten Texts",
+      "example": "5240"
+    },
+    "max_text_length": {
+      "description": "Maximale Zeichenanzahl (konfigurierbar in Einstellungen)",
+      "example": "10000"
+    },
+    "available_correspondents": {
+      "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Korrespondenten",
+      "example": "ACME GmbH, Schmidt Consulting, Energie Lösungen AG, Tech Supplies Ltd"
+    },
+    "available_document_types": {
+      "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Dokumententypen",
+      "example": "Rechnung, Angebot, Vertrag, Quittung, Brief, Bericht"
+    },
+    "available_tags": {
+      "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Tags",
+      "example": "dringend, finanzen, rechtlich, persönlich, geschäftlich, steuer-2024"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "paperless_connection": "Paperless-NGX Verbindung",
+    "paperless_url": "Paperless URL",
+    "paperless_token": "API Token",
+    "openai_settings": "OpenAI Einstellungen",
+    "openai_api_key": "API Schlüssel",
+    "openai_model": "Modell",
+    "max_text_length": "Maximale Textlänge",
+    "auto_update": "Metadaten automatisch aktualisieren",
+    "test_connections": "Verbindungen testen",
+    "save_settings": "Einstellungen speichern",
+    "saved_success": "Einstellungen erfolgreich gespeichert!",
+    "connection_test": "Verbindungstests",
+    "paperless_success": "Paperless-NGX: ✓ Erfolgreich",
+    "paperless_failed": "Paperless-NGX: ✗ Fehlgeschlagen",
+    "openai_success": "OpenAI: ✓ Erfolgreich",
+    "openai_failed": "OpenAI: ✗ Fehlgeschlagen"
+  },
+  "documents": {
+    "title": "Dokumente",
+    "select_tag": "Tag auswählen...",
+    "select_tag_prompt": "Wählen Sie einen Tag aus, um Dokumente anzuzeigen",
+    "no_documents": "Keine Dokumente mit diesem Tag gefunden",
+    "analyze": "Analysieren",
+    "untitled": "Unbenanntes Dokument",
+    "id": "ID",
+    "created": "Erstellt",
+    "from": "Von"
+  },
+  "processing": {
+    "title": "Verarbeitung",
+    "analyzing": "Dokument wird mit OpenAI analysiert...",
+    "current_metadata": "Aktuelle Metadaten",
+    "ai_results": "KI-Analyseergebnisse",
+    "suggested_title": "Vorgeschlagener Titel",
+    "document_date": "Dokumentendatum",
+    "correspondent": "Korrespondent",
+    "document_type": "Dokumententyp",
+    "content_keywords": "Inhalts-Schlüsselwörter",
+    "keywords_hint": "(Beschreibt, worum es im Dokument geht, nicht den Typ)",
+    "suggested_tags": "Vorgeschlagene Tags",
+    "full_analysis": "Vollständige Analyse",
+    "tokens_used": "Verwendete Tokens",
+    "close": "Schließen",
+    "apply_metadata": "Metadaten in Paperless übernehmen",
+    "title_format_hint": "Format: JJJJ-MM-TT - Korrespondent - Typ - Inhalts-Schlüsselwörter"
+  },
+  "prompt": {
+    "title": "Prompt Vorlage",
+    "custom_template": "Benutzerdefinierte Prompt Vorlage",
+    "system_prompt": "System Prompt",
+    "placeholders": "Platzhalter",
+    "load_default": "Standardvorlage laden",
+    "test_prompt": "Prompt testen",
+    "save_prompt": "Prompt Einstellungen speichern",
+    "saved_success": "Prompt Vorlage erfolgreich gespeichert!",
+    "default_loaded": "Standardvorlage geladen!",
+    "placeholders_note": "Platzhalter werden beim Generieren von Prompts automatisch ersetzt. Die Dokumenteninformationen und Ausgabeformat-Anweisungen werden automatisch hinzugefügt.",
+    "test_document_id": "Dokument-ID zum Testen eingeben:",
+    "run_test": "Test ausführen",
+    "testing": "Prompt wird getestet...",
+    "document": "Dokument",
+    "system_prompt_label": "System Prompt:",
+    "generated_prompt": "Generierter Benutzer-Prompt:",
+    "text_stats": "Text-Statistiken: {extracted} Zeichen extrahiert, Vorschau zeigt {preview} Zeichen (max: {max})."
+  },
+  "history": {
+    "title": "Verlauf",
+    "no_history": "Kein Verarbeitungsverlauf verfügbar",
+    "status_completed": "abgeschlossen",
+    "status_failed": "fehlgeschlagen",
+    "status_processing": "wird verarbeitet",
+    "metadata_updated": "Metadaten aktualisiert"
+  },
+  "errors": {
+    "loading_tags": "Fehler beim Laden der Tags",
+    "loading_documents": "Fehler beim Laden der Dokumente",
+    "loading_settings": "Fehler beim Laden der Einstellungen",
+    "saving_settings": "Fehler beim Speichern der Einstellungen",
+    "testing_connections": "Fehler beim Testen der Verbindungen",
+    "loading_history": "Fehler beim Laden des Verlaufs",
+    "saving_prompt": "Fehler beim Speichern des Prompts",
+    "loading_default": "Fehler beim Laden der Standardvorlage",
+    "loading_placeholders": "Fehler beim Laden der Platzhalter",
+    "paperless_not_configured": "Paperless-NGX nicht konfiguriert",
+    "document_id_required": "Bitte geben Sie eine Dokument-ID ein",
+    "tag_required": "Bitte wählen Sie zuerst einen Tag aus, um Dokumente zu laden",
+    "metadata_update_failed": "Fehler beim Aktualisieren der Metadaten"
+  },
+  "success": {
+    "metadata_updated": "Metadaten erfolgreich in Paperless aktualisiert!"
+  },
+  "navigation": {
+    "documents": "Dokumente",
+    "history": "Verlauf",
+    "settings": "Einstellungen",
+    "prompt_template": "Prompt Vorlage"
+  },
+  "common": {
+    "success": "Erfolgreich",
+    "error": "Fehler",
+    "loading": "Lädt...",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "test": "Testen",
+    "none": "Keine",
+    "not_available": "Nicht verfügbar"
+  }
+}

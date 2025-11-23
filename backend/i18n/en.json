@@ -1,0 +1,150 @@
+{
+  "app": {
+    "name": "Paperless-onS",
+    "description": "AI-powered document analysis for Paperless-NGX"
+  },
+  "placeholders": {
+    "filename": {
+      "description": "Original filename of the document",
+      "example": "invoice_2024_001.pdf"
+    },
+    "current_title": {
+      "description": "Current title from Paperless-NGX (or 'Not set')",
+      "example": "Invoice from ACME Corp"
+    },
+    "extracted_text": {
+      "description": "Text extracted by Paperless-NGX OCR (limited by max_text_length setting)",
+      "example": "Invoice\\nDate: 2024-01-15\\nAmount: $1,500.00..."
+    },
+    "text_length": {
+      "description": "Total length of text extracted by Paperless-NGX",
+      "example": "5240"
+    },
+    "max_text_length": {
+      "description": "Maximum characters setting (configurable in Settings)",
+      "example": "10000"
+    },
+    "available_correspondents": {
+      "description": "Comma-separated list of correspondents already stored in Paperless-NGX",
+      "example": "ACME Corp, Smith Consulting, Energy Solutions GmbH, Tech Supplies Ltd"
+    },
+    "available_document_types": {
+      "description": "Comma-separated list of document types already stored in Paperless-NGX",
+      "example": "Invoice, Quote, Contract, Receipt, Letter, Report"
+    },
+    "available_tags": {
+      "description": "Comma-separated list of tags already stored in Paperless-NGX",
+      "example": "urgent, finance, legal, personal, business, tax-2024"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "paperless_connection": "Paperless-NGX Connection",
+    "paperless_url": "Paperless URL",
+    "paperless_token": "API Token",
+    "openai_settings": "OpenAI Settings",
+    "openai_api_key": "API Key",
+    "openai_model": "Model",
+    "max_text_length": "Max Text Length",
+    "auto_update": "Auto-update Metadata",
+    "test_connections": "Test Connections",
+    "save_settings": "Save Settings",
+    "saved_success": "Settings saved successfully!",
+    "connection_test": "Connection Tests",
+    "paperless_success": "Paperless-NGX: ✓ Success",
+    "paperless_failed": "Paperless-NGX: ✗ Failed",
+    "openai_success": "OpenAI: ✓ Success",
+    "openai_failed": "OpenAI: ✗ Failed"
+  },
+  "documents": {
+    "title": "Documents",
+    "select_tag": "Select a tag...",
+    "select_tag_prompt": "Select a tag to view documents",
+    "no_documents": "No documents found with this tag",
+    "analyze": "Analyze",
+    "untitled": "Untitled Document",
+    "id": "ID",
+    "created": "Created",
+    "from": "From"
+  },
+  "processing": {
+    "title": "Processing",
+    "analyzing": "Analyzing document with OpenAI...",
+    "current_metadata": "Current Metadata",
+    "ai_results": "AI Analysis Results",
+    "suggested_title": "Suggested Title",
+    "document_date": "Document Date",
+    "correspondent": "Correspondent",
+    "document_type": "Document Type",
+    "content_keywords": "Content Keywords",
+    "keywords_hint": "(Describes what the document is about, not the type)",
+    "suggested_tags": "Suggested Tags",
+    "full_analysis": "Full Analysis",
+    "tokens_used": "Tokens used",
+    "close": "Close",
+    "apply_metadata": "Apply Metadata to Paperless",
+    "title_format_hint": "Format: YYYY-MM-DD - Correspondent - Type - Content Keywords"
+  },
+  "prompt": {
+    "title": "Prompt Template",
+    "custom_template": "Custom Prompt Template",
+    "system_prompt": "System Prompt",
+    "placeholders": "Placeholders",
+    "load_default": "Load Default Template",
+    "test_prompt": "Test Prompt",
+    "save_prompt": "Save Prompt Settings",
+    "saved_success": "Prompt template saved successfully!",
+    "default_loaded": "Default template loaded!",
+    "placeholders_note": "Placeholders are automatically replaced when generating prompts. The document information and output format instructions are added automatically.",
+    "test_document_id": "Enter Document ID to test:",
+    "run_test": "Run Test",
+    "testing": "Testing prompt...",
+    "document": "Document",
+    "system_prompt_label": "System Prompt:",
+    "generated_prompt": "Generated User Prompt:",
+    "text_stats": "Text Stats: Extracted {extracted} characters, preview shows {preview} characters (max: {max})."
+  },
+  "history": {
+    "title": "History",
+    "no_history": "No processing history available",
+    "status_completed": "completed",
+    "status_failed": "failed",
+    "status_processing": "processing",
+    "metadata_updated": "Metadata Updated"
+  },
+  "errors": {
+    "loading_tags": "Failed to load tags",
+    "loading_documents": "Error loading documents",
+    "loading_settings": "Error loading settings",
+    "saving_settings": "Error saving settings",
+    "testing_connections": "Error testing connections",
+    "loading_history": "Error loading history",
+    "saving_prompt": "Error saving prompt",
+    "loading_default": "Failed to load default template",
+    "loading_placeholders": "Failed to load placeholders",
+    "paperless_not_configured": "Paperless-NGX not configured",
+    "document_id_required": "Please enter a document ID",
+    "tag_required": "Please select a tag first to load documents",
+    "metadata_update_failed": "Failed to update metadata"
+  },
+  "success": {
+    "metadata_updated": "Metadata updated successfully in Paperless!"
+  },
+  "navigation": {
+    "documents": "Documents",
+    "history": "History",
+    "settings": "Settings",
+    "prompt_template": "Prompt Template"
+  },
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "test": "Test",
+    "none": "None",
+    "not_available": "N/A"
+  }
+}

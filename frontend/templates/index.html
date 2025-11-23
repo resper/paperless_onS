@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-onS - Document Analyzer</title>
+    <link href="/static/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">📄 <span data-i18n="app.name">Paperless-onS</span></span>
+            <span class="navbar-text text-white" data-i18n="app.description">AI-Powered Document Analysis</span>
+            <div class="d-flex align-items-center">
+                <button class="btn btn-outline-light btn-sm" id="languageToggle" onclick="toggleLanguage()">
+                    <span id="currentLang">EN</span> 🌐
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white" data-i18n="navigation.title">
+                        Navigation
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <a href="#" class="list-group-item list-group-item-action active" onclick="showTab('documents')" data-i18n="navigation.documents">
+                            Documents
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action" onclick="showTab('settings')" data-i18n="navigation.settings">
+                            Settings
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action" onclick="showTab('history')" data-i18n="navigation.history">
+                            Processing History
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9">
+                <!-- Documents Tab -->
+                <div id="documentsTab" class="content-tab">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0" data-i18n="documents.title">Documents</h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Document Filters -->
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title" data-i18n="documents.filters">Filter</h6>
+                                    <div class="row g-3">
+                                        <!-- Tags Filter -->
+                                        <div class="col-md-3">
+                                            <label for="filterDocumentTags" class="form-label" data-i18n="documents.filter_by_tag">Nach Tag filtern</label>
+                                            <select class="form-select form-select-sm" id="filterDocumentTags" multiple size="4">
+                                                <option value="" data-i18n="documents.all_tags">Alle Tags</option>
+                                                <!-- Tags will be loaded dynamically -->
+                                            </select>
+                                        </div>
+
+                                        <!-- Correspondent Filter -->
+                                        <div class="col-md-3">
+                                            <label for="filterCorrespondent" class="form-label" data-i18n="documents.filter_by_correspondent">Nach Absender filtern</label>
+                                            <select class="form-select form-select-sm" id="filterCorrespondent">
+                                                <option value="" data-i18n="documents.all_correspondents">Alle Absender</option>
+                                                <!-- Correspondents will be loaded dynamically -->
+                                            </select>
+                                        </div>
+
+                                        <!-- Document Type Filter -->
+                                        <div class="col-md-3">
+                                            <label for="filterDocumentType" class="form-label" data-i18n="documents.filter_by_document_type">Nach Dokumententyp filtern</label>
+                                            <select class="form-select form-select-sm" id="filterDocumentType">
+                                                <option value="" data-i18n="documents.all_document_types">Alle Dokumententypen</option>
+                                                <!-- Document types will be loaded dynamically -->
+                                            </select>
+                                        </div>
+
+                                        <!-- Date Filter -->
+                                        <div class="col-md-3">
+                                            <label class="form-label" data-i18n="documents.filter_by_date">Nach Datum filtern</label>
+                                            <div class="mb-2">
+                                                <input type="date" class="form-control form-control-sm" id="filterDateFrom" data-i18n-placeholder="documents.date_from" placeholder="Von Datum">
+                                            </div>
+                                            <input type="date" class="form-control form-control-sm" id="filterDateTo" data-i18n-placeholder="documents.date_to" placeholder="Bis Datum">
+                                        </div>
+                                    </div>
+
+                                    <!-- Filter Buttons -->
+                                    <div class="mt-3">
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="applyDocumentFilters()" data-i18n="documents.apply_filters">
+                                            Filter anwenden
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm ms-2" onclick="clearDocumentFilters()" data-i18n="documents.clear_filters">
+                                            Filter zurücksetzen
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Documents Loading/Content -->
+                            <div id="documentsLoading" class="text-center" style="display: none;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden" data-i18n="common.loading">Loading...</span>
+                                </div>
+                            </div>
+                            <div id="documentsContent">
+                                <p class="text-muted" data-i18n="documents.select_tag_prompt">Select a tag to view documents</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="settingsTab" class="content-tab" style="display: none;">
+                    <!-- Settings Sub-Tabs -->
+                    <ul class="nav nav-tabs" id="settingsSubTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="api-tab" data-bs-toggle="tab" data-bs-target="#apiConfig" type="button" role="tab" aria-controls="apiConfig" aria-selected="true" data-i18n="settings.title">
+                                API Configuration
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="processing-tab" data-bs-toggle="tab" data-bs-target="#processingConfig" type="button" role="tab" aria-controls="processingConfig" aria-selected="false" data-i18n="processing_settings.title">
+                                Document Processing
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="auto-processing-tab" data-bs-toggle="tab" data-bs-target="#autoProcessingConfig" type="button" role="tab" aria-controls="autoProcessingConfig" aria-selected="false" data-i18n="auto_processing.title">
+                                Automatic Processing
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="prompt-tab" data-bs-toggle="tab" data-bs-target="#promptConfig" type="button" role="tab" aria-controls="promptConfig" aria-selected="false" data-i18n="prompt.title">
+                                Prompt Configuration
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="settingsSubTabsContent">
+                        <!-- API Configuration Tab -->
+                        <div class="tab-pane fade show active" id="apiConfig" role="tabpanel" aria-labelledby="api-tab">
+                            <div class="card border-top-0 rounded-top-0">
+                                <div class="card-body">
+                                    <form id="settingsForm">
+                                        <div class="mb-3">
+                                            <label for="paperlessUrl" class="form-label" data-i18n="settings.paperless_url">Paperless-NGX URL</label>
+                                            <input type="text" class="form-control" id="paperlessUrl"
+                                                   placeholder="http://localhost:8000">
+                                            <div class="form-text" data-i18n="settings.paperless_url_help">URL of your Paperless-NGX instance</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="paperlessToken" class="form-label" data-i18n="settings.paperless_token">Paperless API Token</label>
+                                            <input type="password" class="form-control" id="paperlessToken"
+                                                   data-i18n-placeholder="settings.paperless_token_placeholder"
+                                                   placeholder="Enter your Paperless token">
+                                            <div class="form-text" data-i18n="settings.paperless_token_help">Authentication token from Paperless-NGX</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="openaiKey" class="form-label" data-i18n="settings.openai_api_key">OpenAI API Key</label>
+                                            <input type="password" class="form-control" id="openaiKey"
+                                                   placeholder="sk-...">
+                                            <div class="form-text" data-i18n="settings.openai_api_key_help">Your OpenAI API key</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="openaiModel" class="form-label" data-i18n="settings.openai_model">OpenAI Model</label>
+                                            <select class="form-select" id="openaiModel">
+                                                <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
+                                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="maxTextLength" class="form-label" data-i18n="settings.max_text_length">Maximum Text Length</label>
+                                            <input type="number" class="form-control" id="maxTextLength"
+                                                   placeholder="10000" min="1000" max="50000" step="1000">
+                                            <div class="form-text" data-i18n="settings.max_text_length_help">Maximum number of characters to extract from documents for analysis (1,000 - 50,000)</div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary" data-i18n="settings.save_settings">Save Settings</button>
+                                        <button type="button" class="btn btn-secondary" onclick="testConnections()" data-i18n="settings.test_connections">Test Connections</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Document Processing Tab -->
+                        <div class="tab-pane fade" id="processingConfig" role="tabpanel" aria-labelledby="processing-tab">
+                            <div class="card border-top-0 rounded-top-0">
+                                <div class="card-body">
+                                    <form id="processingSettingsForm">
+                                        <!-- Text Extraction Mode -->
+                                        <div class="mb-4">
+                                            <label class="form-label" data-i18n="processing_settings.text_source">Text Source for AI Analysis</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="textSourceMode" id="textSourcePaperless" value="paperless" checked>
+                                                <label class="form-check-label" for="textSourcePaperless" data-i18n="processing_settings.text_source_paperless">
+                                                    Use text extracted by Paperless-NGX (OCR)
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="textSourceMode" id="textSourceAI" value="ai_ocr">
+                                                <label class="form-check-label" for="textSourceAI" data-i18n="processing_settings.text_source_ai">
+                                                    Send document file to AI for text recognition (Vision API)
+                                                </label>
+                                            </div>
+                                            <div class="form-text" data-i18n="processing_settings.text_source_help">Choose whether to use Paperless OCR text or let the AI extract text from the document image.</div>
+                                        </div>
+
+                                        <!-- Text Preview Limit -->
+                                        <div class="mb-4">
+                                            <label for="displayTextLength" class="form-label" data-i18n="processing_settings.display_text_length">Text Preview Limit</label>
+                                            <input type="number" class="form-control" id="displayTextLength"
+                                                   placeholder="5000" min="500" max="20000" step="500">
+                                            <div class="form-text" data-i18n="processing_settings.display_text_length_help">Maximum number of characters for text preview in analysis dialog (500 - 20,000)</div>
+                                        </div>
+
+                                        <hr>
+
+                                        <!-- Auto Update Metadata -->
+                                        <h6 class="mb-3" data-i18n="processing_settings.auto_update_title">Automatic Updates</h6>
+                                        <div class="mb-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="autoUpdateMetadata">
+                                                <label class="form-check-label" for="autoUpdateMetadata" data-i18n="processing_settings.auto_update">
+                                                    Automatically update metadata (no confirmation)
+                                                </label>
+                                            </div>
+                                            <div class="form-text" data-i18n="processing_settings.auto_update_help">
+                                                If enabled, metadata will be applied directly without confirmation dialog.
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary" data-i18n="processing_settings.save">Save Processing Settings</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Automatic Processing Tab -->
+                        <div class="tab-pane fade" id="autoProcessingConfig" role="tabpanel" aria-labelledby="auto-processing-tab">
+                            <div class="card border-top-0 rounded-top-0">
+                                <div class="card-body">
+                                    <form id="autoProcessingSettingsForm">
+                                        <!-- Info Box -->
+                                        <div class="alert alert-info mb-4">
+                                            <h6 class="alert-heading" data-i18n="auto_processing.info_title">About Automatic Processing</h6>
+                                            <p class="mb-0 small" data-i18n="auto_processing.info_text">
+                                                Configure automatic document processing. Documents with the selected filter tag will be automatically analyzed and updated. This feature will be implemented in a future update.
+                                            </p>
+                                        </div>
+
+                                        <!-- Enable Auto Processing -->
+                                        <div class="mb-4">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="enableAutoProcessing">
+                                                <label class="form-check-label" for="enableAutoProcessing" data-i18n="auto_processing.enable">
+                                                    Enable Automatic Processing
+                                                </label>
+                                            </div>
+                                            <div class="form-text" data-i18n="auto_processing.enable_help">
+                                                When enabled, documents with the filter tag will be automatically processed
+                                            </div>
+                                        </div>
+
+                                        <!-- Filter Tag Selection -->
+                                        <div class="mb-4">
+                                            <label for="autoProcessingFilterTag" class="form-label" data-i18n="auto_processing.filter_tag">
+                                                Filter Tag for Automatic Processing
+                                            </label>
+                                            <div class="input-group">
+                                                <select class="form-select" id="autoProcessingFilterTag">
+                                                    <option value="" data-i18n="auto_processing.select_filter_tag">Select a filter tag...</option>
+                                                    <!-- Tags will be loaded dynamically -->
+                                                </select>
+                                                <button class="btn btn-outline-secondary" type="button" onclick="loadAutoProcessingTags()" data-i18n="auto_processing.refresh_tags">
+                                                    🔄 Refresh
+                                                </button>
+                                            </div>
+                                            <div class="form-text" data-i18n="auto_processing.filter_tag_help">
+                                                Documents with this tag will be automatically processed
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <!-- Tag Management After Processing -->
+                                        <h6 class="mb-3" data-i18n="auto_processing.tag_management">Tag Management After Processing</h6>
+
+                                        <!-- Remove Filter Tag -->
+                                        <div class="mb-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="removeFilterTagAfterProcessing">
+                                                <label class="form-check-label" for="removeFilterTagAfterProcessing" data-i18n="auto_processing.remove_filter_tag">
+                                                    Remove filter tag after successful processing
+                                                </label>
+                                            </div>
+                                            <div class="form-text" data-i18n="auto_processing.remove_filter_tag_help">
+                                                Automatically remove the filter tag from documents after they have been successfully processed
+                                            </div>
+                                        </div>
+
+                                        <!-- Add Tag After Processing -->
+                                        <div class="mb-4">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="addTagAfterProcessing">
+                                                <label class="form-check-label" for="addTagAfterProcessing" data-i18n="auto_processing.add_tag">
+                                                    Add tag after successful processing
+                                                </label>
+                                            </div>
+                                            <select class="form-select" id="addTagAfterProcessingSelect">
+                                                <option value="" data-i18n="auto_processing.select_tag_to_add">Select tag to add...</option>
+                                                <!-- Tags will be loaded dynamically -->
+                                            </select>
+                                            <div class="form-text" data-i18n="auto_processing.add_tag_help">
+                                                Automatically add a specific tag to documents after successful processing
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary" data-i18n="auto_processing.save">
+                                            Save Automatic Processing Settings
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Prompt Configuration Tab -->
+                        <div class="tab-pane fade" id="promptConfig" role="tabpanel" aria-labelledby="prompt-tab">
+                            <div class="card border-top-0 rounded-top-0">
+                                <div class="card-body">
+                                    <!-- Modular Prompts Form -->
+                                    <div id="modularPromptForm">
+                                        <h6 class="mb-3" data-i18n="prompt.modular_title">Modular Prompt Configuration</h6>
+                                        <p class="text-muted small" data-i18n="prompt.modular_help">Define specific instructions for each metadata field. The AI will return structured JSON responses.</p>
+
+                                        <!-- Configuration Management -->
+                                        <div class="card bg-light mb-4">
+                                            <div class="card-body">
+                                                <h6 class="card-title" data-i18n="prompt.configurations">Saved Configurations</h6>
+                                                <div class="row g-2">
+                                                    <div class="col-md-6">
+                                                        <select class="form-select" id="configurationSelect">
+                                                            <option value="" data-i18n="prompt.select_configuration">Select a configuration...</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSelectedConfiguration()" data-i18n="prompt.load_configuration">
+                                                            📂 Load Configuration
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="mt-3">
+                                                    <button type="button" class="btn btn-sm btn-success" onclick="showSaveConfigDialog()" data-i18n="prompt.save_as_new">
+                                                        💾 Save as New Configuration
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-primary ms-1" onclick="updateSelectedConfiguration()" data-i18n="prompt.update_current">
+                                                        🔄 Update Current Configuration
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-danger ms-1" onclick="deleteSelectedConfiguration()" data-i18n="prompt.delete_configuration">
+                                                        🗑️ Delete Configuration
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <form id="modularPromptsForm">
+                                            <!-- Document Date -->
+                                            <div class="mb-3">
+                                                <label for="promptDocumentDate" class="form-label">
+                                                    <span data-i18n="prompt.field_document_date">Document Date</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptDocumentDate" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Correspondent -->
+                                            <div class="mb-3">
+                                                <label for="promptCorrespondent" class="form-label">
+                                                    <span data-i18n="prompt.field_correspondent">Correspondent</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptCorrespondent" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Document Type -->
+                                            <div class="mb-3">
+                                                <label for="promptDocumentType" class="form-label">
+                                                    <span data-i18n="prompt.field_document_type">Document Type</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptDocumentType" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Content Keywords -->
+                                            <div class="mb-3">
+                                                <label for="promptContentKeywords" class="form-label">
+                                                    <span data-i18n="prompt.field_content_keywords">Content Keywords</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptContentKeywords" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Suggested Title -->
+                                            <div class="mb-3">
+                                                <label for="promptSuggestedTitle" class="form-label">
+                                                    <span data-i18n="prompt.field_suggested_title">Suggested Title</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptSuggestedTitle" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Suggested Tag -->
+                                            <div class="mb-3">
+                                                <label for="promptSuggestedTag" class="form-label">
+                                                    <span data-i18n="prompt.field_suggested_tag">Suggested Tag</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptSuggestedTag" rows="3"></textarea>
+                                            </div>
+
+                                            <hr>
+
+                                            <!-- Free Instructions -->
+                                            <div class="mb-3">
+                                                <label for="promptFreeInstructions" class="form-label">
+                                                    <span data-i18n="prompt.field_free_instructions">General Instructions</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptFreeInstructions" rows="2"></textarea>
+                                                <div class="form-text" data-i18n="prompt.free_instructions_help">Additional instructions that apply to all fields (e.g., language preferences, formatting rules).</div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadDefaultModularPrompts()" data-i18n="prompt.load_defaults">
+                                                    🔄 Load Default Instructions
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-info ms-2" onclick="showPlaceholders()" data-i18n="prompt.show_placeholders">
+                                                    📋 Show Available Placeholders
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="showPromptTestDialog()" data-i18n="prompt.test_prompt">
+                                                    🧪 Test with Document
+                                                </button>
+                                            </div>
+
+                                            <button type="submit" class="btn btn-primary" data-i18n="prompt.save_prompt">💾 Save Prompt</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="historyTab" class="content-tab" style="display: none;">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0" data-i18n="history.title">Processing History</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="historyContent">
+                                <p class="text-muted" data-i18n="common.loading">Loading history...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing Modal -->
+    <div class="modal fade" id="processingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="processing.title">Document Analysis Results</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="processingModalBody">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden" data-i18n="common.loading">Processing...</span>
+                        </div>
+                        <p class="mt-2" data-i18n="processing.analyzing">Analyzing document...</p>
+                    </div>
+                </div>
+                <div class="modal-footer" id="processingModalFooter">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Placeholders Modal -->
+    <div class="modal fade" id="placeholdersModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="prompt.placeholders">Available Placeholders</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="placeholdersModalBody">
+                    <p class="text-muted" data-i18n="common.loading">Loading...</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document ID Input Modal -->
+    <div class="modal fade" id="documentIdModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="prompt.test_prompt_title">Test Prompt with Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="testDocumentIdInput" class="form-label" data-i18n="prompt.test_document_id">Enter Document ID to test:</label>
+                    <input type="number" class="form-control" id="testDocumentIdInput" placeholder="123" min="1" onkeypress="if(event.key === 'Enter') runPromptTest()">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="runPromptTest()" data-i18n="prompt.run_test">Run Test</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Test Results Modal -->
+    <div class="modal fade" id="promptTestModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="prompt.test_prompt_title">Test Prompt with Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="promptTestModalBody">
+                    <p class="text-muted" data-i18n="common.loading">Loading...</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Configuration Modal -->
+    <div class="modal fade" id="saveConfigModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="prompt.save_as_new">Save as New Configuration</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="configNameInput" class="form-label" data-i18n="prompt.configuration_name">Configuration Name</label>
+                    <input type="text" class="form-control" id="configNameInput" data-i18n-placeholder="prompt.enter_name" placeholder="Enter configuration name" onkeypress="if(event.key === 'Enter') saveNewConfiguration()">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="saveNewConfiguration()" data-i18n="prompt.save_config">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
