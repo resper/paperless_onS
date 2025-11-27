@@ -210,6 +210,18 @@ class OpenAIDocumentAnalyzer:
             # Parse response
             analysis_result = response.choices[0].message.content
 
+            # Extract token usage information
+            tokens_used = 0
+            if hasattr(response, "usage") and response.usage:
+                tokens_used = response.usage.total_tokens
+                # Debug logging for token usage
+                print(f"\n🔢 TEXT-BASED API TOKEN USAGE:")
+                print(f"   - Prompt tokens: {response.usage.prompt_tokens}")
+                print(f"   - Completion tokens: {response.usage.completion_tokens}")
+                print(f"   - Total tokens: {response.usage.total_tokens}")
+            else:
+                print(f"\n⚠️  WARNING: Text-based API response has no usage information!")
+
             # Log API call
             await self._log_api_call(
                 endpoint="/v1/chat/completions",
@@ -222,7 +234,8 @@ class OpenAIDocumentAnalyzer:
                 },
                 response_data={
                     "usage": dict(response.usage) if hasattr(response, "usage") else None,
-                    "analysis_length": len(analysis_result)
+                    "analysis_length": len(analysis_result),
+                    "tokens_used": tokens_used
                 },
                 duration_ms=duration_ms
             )
@@ -230,12 +243,17 @@ class OpenAIDocumentAnalyzer:
             # Parse structured response
             metadata = self._parse_analysis_result(analysis_result)
 
+            print(f"\n✅ TEXT-BASED ANALYSIS COMPLETE:")
+            print(f"   - Tokens used: {tokens_used}")
+            print(f"   - Text input length: {len(extracted_text)}")
+            print(f"   - Analysis length: {len(analysis_result)}\n")
+
             return {
                 "success": True,
                 "extracted_text": extracted_text,
                 "analysis": analysis_result,
                 "suggested_metadata": metadata,
-                "tokens_used": response.usage.total_tokens if hasattr(response, "usage") else 0
+                "tokens_used": tokens_used
             }
 
         except Exception as e:
@@ -776,6 +794,20 @@ TAGS: [tag1, tag2, tag3, ...]
             # Parse response
             response_text = response.choices[0].message.content
 
+            # Extract token usage information
+            tokens_used = 0
+            if hasattr(response, "usage") and response.usage:
+                tokens_used = response.usage.total_tokens
+                # Debug logging for token usage
+                print(f"\n🔢 VISION API TOKEN USAGE:")
+                print(f"   - Prompt tokens: {response.usage.prompt_tokens}")
+                print(f"   - Completion tokens: {response.usage.completion_tokens}")
+                print(f"   - Total tokens: {response.usage.total_tokens}")
+            else:
+                print(f"\n⚠️  WARNING: Vision API response has no usage information!")
+                print(f"   - Response type: {type(response)}")
+                print(f"   - Has usage attr: {hasattr(response, 'usage')}")
+
             # Extract the OCR text and analysis from the response
             ocr_text = ""
             analysis_result = response_text
@@ -805,7 +837,8 @@ TAGS: [tag1, tag2, tag3, ...]
                 response_data={
                     "usage": dict(response.usage) if hasattr(response, "usage") else None,
                     "analysis_length": len(analysis_result),
-                    "ocr_text_length": len(ocr_text)
+                    "ocr_text_length": len(ocr_text),
+                    "tokens_used": tokens_used
                 },
                 duration_ms=duration_ms
             )
@@ -813,12 +846,17 @@ TAGS: [tag1, tag2, tag3, ...]
             # Parse structured response
             metadata = self._parse_analysis_result(analysis_result)
 
+            print(f"\n✅ VISION API ANALYSIS COMPLETE:")
+            print(f"   - Tokens used: {tokens_used}")
+            print(f"   - OCR text length: {len(ocr_text)}")
+            print(f"   - Analysis length: {len(analysis_result)}\n")
+
             return {
                 "success": True,
                 "extracted_text": ocr_text,  # Return the actual OCR text from Vision API
                 "analysis": analysis_result,
                 "suggested_metadata": metadata,
-                "tokens_used": response.usage.total_tokens if hasattr(response, "usage") else 0,
+                "tokens_used": tokens_used,
                 "text_source": "vision_api"  # Mark that this came from Vision API
             }
 
