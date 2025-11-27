@@ -89,7 +89,8 @@ async def filter_documents(
     correspondent: Optional[int] = Query(default=None),
     document_type: Optional[int] = Query(default=None),
     created_after: Optional[str] = Query(default=None),
-    created_before: Optional[str] = Query(default=None)
+    created_before: Optional[str] = Query(default=None),
+    ordering: Optional[str] = Query(default="-id")
 ):
     """
     Filter documents by multiple criteria
@@ -100,6 +101,9 @@ async def filter_documents(
         document_type: Document type ID (optional)
         created_after: Date string YYYY-MM-DD (optional)
         created_before: Date string YYYY-MM-DD (optional)
+        ordering: Sort order field (optional, default: -id)
+                  Prefix with '-' for descending order
+                  Available: id, created, modified, added, title
 
     Returns:
         Filtered list of documents
@@ -125,6 +129,9 @@ async def filter_documents(
 
         if created_before:
             params["created__date__lte"] = created_before
+
+        if ordering:
+            params["ordering"] = ordering
 
         # Fetch filtered documents from Paperless
         result = await client.search_documents(params)

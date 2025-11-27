@@ -4,6 +4,15 @@ console.log('🔄 Paperless-onS loaded - Version 2025-11-22 23:30 - Database tex
 
 const API_BASE = '';
 
+// Global state for ID sorting (default: descending = newest first)
+let idSortOrder = 'desc';
+
+// Global state for document limit (default: 50)
+let documentLimit = 50;
+
+// Global Paperless URL (loaded on startup)
+let paperlessUrl = '';
+
 // Tab Management
 function showTab(tabName) {
     // Hide all tabs
@@ -32,6 +41,23 @@ function showTab(tabName) {
     }
 }
 
+// Load Paperless URL from settings
+async function loadPaperlessUrl() {
+    try {
+        const response = await fetch(`${API_BASE}/api/settings/paperless_url`);
+        const data = await response.json();
+        if (data && data.value) {
+            paperlessUrl = data.value;
+            // Remove trailing slash if present
+            if (paperlessUrl.endsWith('/')) {
+                paperlessUrl = paperlessUrl.slice(0, -1);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading paperless_url:', error);
+    }
+}
+
 // Load Tags and Documents based on processing settings
 async function loadTags() {
     try {
@@ -45,25 +71,340 @@ async function loadTags() {
     }
 }
 
+// Toggle ID sort order
+function toggleIdSort() {
+    // Toggle between asc and desc
+    idSortOrder = idSortOrder === 'desc' ? 'asc' : 'desc';
+
+    // Update icon
+    const icon = document.getElementById('sortIcon');
+    icon.textContent = idSortOrder === 'desc' ? '⬇️' : '⬆️';
+
+    // Reload documents with new sort order
+    loadDocumentsByFilterTags();
+}
+
+// Change document limit
+function changeDocumentLimit() {
+    const select = document.getElementById('documentLimit');
+    const value = select.value;
+
+    // Set global limit ('all' means no limit)
+    documentLimit = value === 'all' ? null : parseInt(value);
+
+    // Reload documents with new limit
+    loadDocumentsByFilterTags();
+}
+
+// Toggle select all documents
+function toggleSelectAll() {
+    const masterCheckbox = document.getElementById('selectAllDocuments');
+    const checkboxes = document.querySelectorAll('.document-checkbox');
+
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = masterCheckbox.checked;
+    });
+
+    updateBulkSelectionUI();
+}
+
+// Update bulk selection UI
+function updateBulkSelectionUI() {
+    const checkboxes = document.querySelectorAll('.document-checkbox');
+    const checkedBoxes = document.querySelectorAll('.document-checkbox:checked');
+    const masterCheckbox = document.getElementById('selectAllDocuments');
+    const bulkProcessBtn = document.getElementById('bulkProcessBtn');
+    const selectedCount = document.getElementById('selectedCount');
+
+    // Update master checkbox state
+    if (checkedBoxes.length === 0) {
+        masterCheckbox.checked = false;
+        masterCheckbox.indeterminate = false;
+    } else if (checkedBoxes.length === checkboxes.length) {
+        masterCheckbox.checked = true;
+        masterCheckbox.indeterminate = false;
+    } else {
+        masterCheckbox.checked = false;
+        masterCheckbox.indeterminate = true;
+    }
+
+    // Update bulk action button visibility and count
+    if (checkedBoxes.length > 0) {
+        bulkProcessBtn.style.display = 'inline-block';
+        selectedCount.textContent = checkedBoxes.length;
+    } else {
+        bulkProcessBtn.style.display = 'none';
+    }
+}
+
+// Start bulk processing - show configuration modal
+async function startBulkProcessing() {
+    const checkedBoxes = document.querySelectorAll('.document-checkbox:checked');
+    const documentIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+
+    if (documentIds.length === 0) {
+        showError(t('documents.no_documents_selected'));
+        return;
+    }
+
+    // Store document IDs globally for later use
+    window.bulkProcessingDocumentIds = documentIds;
+
+    // Load available tags for the bulk processing tag selector
+    try {
+        const response = await fetch(`${API_BASE}/api/tags/all`);
+        const data = await response.json();
+
+        if (data.success) {
+            const tagSelect = document.getElementById('bulkProcessingTagSelect');
+            tagSelect.innerHTML = `<option value="">${t('documents.select_tag')}</option>`;
+
+            data.tags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag.id;
+                option.textContent = tag.name;
+                tagSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading tags for bulk processing:', error);
+    }
+
+    // Reset all checkboxes to checked state
+    document.getElementById('bulkUpdateTitle').checked = true;
+    document.getElementById('bulkUpdateDate').checked = true;
+    document.getElementById('bulkUpdateCorrespondent').checked = true;
+    document.getElementById('bulkUpdateDocumentType').checked = true;
+    document.getElementById('bulkUpdateKeywords').checked = true;
+    document.getElementById('bulkUpdateTags').checked = true;
+    document.getElementById('bulkClearExistingTags').checked = false;
+    document.getElementById('bulkAddProcessingTag').checked = false;
+    document.getElementById('bulkProcessingTagSelect').disabled = true;
+
+    // Show configuration modal
+    const configModal = new bootstrap.Modal(document.getElementById('bulkProcessingConfigModal'));
+    configModal.show();
+}
+
+// Confirm and start bulk processing after configuration
+async function confirmBulkProcessing() {
+    const documentIds = window.bulkProcessingDocumentIds;
+
+    if (!documentIds || documentIds.length === 0) {
+        showError(t('documents.no_documents_selected'));
+        return;
+    }
+
+    // Get selected fields
+    const selectedFields = {
+        title: document.getElementById('bulkUpdateTitle').checked,
+        document_date: document.getElementById('bulkUpdateDate').checked,
+        correspondent: document.getElementById('bulkUpdateCorrespondent').checked,
+        document_type: document.getElementById('bulkUpdateDocumentType').checked,
+        keywords: document.getElementById('bulkUpdateKeywords').checked,
+        tags: document.getElementById('bulkUpdateTags').checked
+    };
+
+    // Get tag options
+    const clearExistingTags = document.getElementById('bulkClearExistingTags').checked;
+    const addProcessingTag = document.getElementById('bulkAddProcessingTag').checked;
+    const processingTagId = addProcessingTag ? document.getElementById('bulkProcessingTagSelect').value : null;
+
+    // Validate processing tag selection
+    if (addProcessingTag && !processingTagId) {
+        showError(t('documents.bulk_tag_required'));
+        return;
+    }
+
+    // Close configuration modal
+    bootstrap.Modal.getInstance(document.getElementById('bulkProcessingConfigModal')).hide();
+
+    // Load text_source_mode from database
+    let textSourceMode = 'paperless';  // default
+    try {
+        const settingResponse = await fetch(`${API_BASE}/api/settings/text_source_mode`);
+        const settingData = await settingResponse.json();
+        if (settingData && settingData.value) {
+            textSourceMode = settingData.value;
+        }
+    } catch (error) {
+        console.error('Error loading text_source_mode, using default:', error);
+    }
+
+    // Show progress modal
+    const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+    const modalBody = document.getElementById('processingModalBody');
+    const modalFooter = document.getElementById('processingModalFooter');
+
+    modal.show();
+
+    let processed = 0;
+    let succeeded = 0;
+    let failed = 0;
+
+    modalBody.innerHTML = `
+        <div class="text-center">
+            <h6 data-i18n="documents.bulk_processing">Bulk Processing</h6>
+            <p><span data-i18n="documents.processing_documents">Processing documents</span>: <span id="bulkProgress">${processed}/${documentIds.length}</span></p>
+            <div class="progress mb-3">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                     style="width: 0%" id="bulkProgressBar"></div>
+            </div>
+            <p class="text-muted small"><span data-i18n="documents.succeeded">Succeeded</span>: <span id="bulkSucceeded">${succeeded}</span> |
+               <span data-i18n="documents.failed">Failed</span>: <span id="bulkFailed">${failed}</span></p>
+        </div>
+    `;
+
+    modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal" disabled data-i18n="common.close">Close</button>`;
+
+    // Process documents sequentially
+    for (const documentId of documentIds) {
+        try {
+            // Process document with OpenAI
+            const response = await fetch(`${API_BASE}/api/documents/process`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    document_id: documentId,
+                    auto_update: false,  // We'll manually apply metadata with selected fields
+                    text_source_mode: textSourceMode
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Build metadata object with only selected fields
+                const metadata = data.analysis.suggested_metadata;
+                const selectedMetadata = {};
+
+                if (selectedFields.title && metadata.title) {
+                    selectedMetadata.title = metadata.title;
+                }
+
+                if (selectedFields.document_date && metadata.document_date) {
+                    selectedMetadata.document_date = metadata.document_date;
+                }
+
+                if (selectedFields.correspondent && metadata.correspondent) {
+                    selectedMetadata.correspondent = metadata.correspondent;
+                }
+
+                if (selectedFields.document_type && metadata.document_type) {
+                    selectedMetadata.document_type = metadata.document_type;
+                }
+
+                if (selectedFields.keywords && metadata.keywords) {
+                    selectedMetadata.keywords = metadata.keywords;
+                }
+
+                if (selectedFields.tags && metadata.suggested_tags) {
+                    selectedMetadata.suggested_tags = metadata.suggested_tags;
+                    selectedMetadata.clear_existing_tags = clearExistingTags;
+                }
+
+                // Add bulk processing tag if requested
+                if (addProcessingTag && processingTagId) {
+                    // Add to suggested tags or create new array
+                    if (!selectedMetadata.suggested_tags) {
+                        selectedMetadata.suggested_tags = [];
+                    }
+                    // Add the processing tag by ID (will be converted to name by backend)
+                    selectedMetadata.bulk_processing_tag_id = processingTagId;
+                }
+
+                // Apply selected metadata
+                const applyResponse = await fetch(`${API_BASE}/api/documents/apply-metadata`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        document_id: documentId,
+                        suggested_metadata: selectedMetadata
+                    })
+                });
+
+                const applyData = await applyResponse.json();
+
+                if (applyData.success) {
+                    succeeded++;
+                } else {
+                    failed++;
+                }
+            } else {
+                failed++;
+            }
+        } catch (error) {
+            console.error(`Error processing document ${documentId}:`, error);
+            failed++;
+        }
+
+        processed++;
+
+        // Update progress
+        const progressPercent = (processed / documentIds.length) * 100;
+        document.getElementById('bulkProgress').textContent = `${processed}/${documentIds.length}`;
+        document.getElementById('bulkProgressBar').style.width = `${progressPercent}%`;
+        document.getElementById('bulkSucceeded').textContent = succeeded;
+        document.getElementById('bulkFailed').textContent = failed;
+    }
+
+    // Show completion message
+    modalBody.innerHTML = `
+        <div class="alert alert-${failed === 0 ? 'success' : 'warning'}">
+            <h6 data-i18n="documents.bulk_processing_complete">Bulk Processing Complete</h6>
+            <p><span data-i18n="documents.total_processed">Total processed</span>: ${processed}</p>
+            <p><span data-i18n="documents.succeeded">Succeeded</span>: ${succeeded}</p>
+            <p><span data-i18n="documents.failed">Failed</span>: ${failed}</p>
+        </div>
+    `;
+
+    modalFooter.innerHTML = `<button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-i18n="common.close">Close</button>`;
+
+    // Reload documents and clear selection
+    await loadDocumentsByFilterTags();
+
+    // Clear checkboxes after reload
+    setTimeout(() => {
+        document.getElementById('selectAllDocuments').checked = false;
+        updateBulkSelectionUI();
+    }, 500);
+}
+
 // Load all documents on homepage
 async function loadDocumentsByFilterTags() {
     const loadingDiv = document.getElementById('documentsLoading');
     const contentDiv = document.getElementById('documentsContent');
+    const countDiv = document.getElementById('documentCount');
 
     loadingDiv.style.display = 'block';
     contentDiv.innerHTML = '';
 
     try {
-        // Load ALL documents (not filtered by auto-processing tag)
-        const response = await fetch(`${API_BASE}/api/documents/filter`);
+        // Use global idSortOrder
+        const ordering = idSortOrder === 'desc' ? '-id' : 'id';
+
+        // Load ALL documents (not filtered by auto-processing tag) with sorting
+        const response = await fetch(`${API_BASE}/api/documents/filter?ordering=${ordering}`);
         const data = await response.json();
 
         loadingDiv.style.display = 'none';
 
         if (data.success && data.documents && data.documents.length > 0) {
-            contentDiv.innerHTML = data.documents.map(doc => createDocumentCard(doc)).join('');
+            // Apply document limit
+            const totalCount = data.documents.length;
+            const displayDocuments = documentLimit ? data.documents.slice(0, documentLimit) : data.documents;
+
+            contentDiv.innerHTML = displayDocuments.map(doc => createDocumentCard(doc)).join('');
+
+            // Show count with limit info
+            if (documentLimit && totalCount > documentLimit) {
+                countDiv.textContent = `${displayDocuments.length} ${t('documents.of')} ${totalCount} ${t('documents.documents_found')}`;
+            } else {
+                countDiv.textContent = `${totalCount} ${t('documents.documents_found')}`;
+            }
         } else {
             contentDiv.innerHTML = `<p class="text-muted">${t('documents.no_documents')}</p>`;
+            countDiv.textContent = '';
         }
     } catch (error) {
         loadingDiv.style.display = 'none';
@@ -184,6 +525,7 @@ async function loadDocumentFilters() {
 async function applyDocumentFilters() {
     const loadingDiv = document.getElementById('documentsLoading');
     const contentDiv = document.getElementById('documentsContent');
+    const countDiv = document.getElementById('documentCount');
 
     // Get filter values
     const selectedTags = Array.from(document.getElementById('filterDocumentTags').selectedOptions).map(opt => opt.value);
@@ -191,6 +533,9 @@ async function applyDocumentFilters() {
     const selectedDocType = document.getElementById('filterDocumentType').value;
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
+
+    // Use global idSortOrder
+    const ordering = idSortOrder === 'desc' ? '-id' : 'id';
 
     loadingDiv.style.display = 'block';
     contentDiv.innerHTML = '';
@@ -219,6 +564,9 @@ async function applyDocumentFilters() {
             params.append('created_before', dateTo);
         }
 
+        // Add ordering parameter
+        params.append('ordering', ordering);
+
         // Fetch filtered documents
         const response = await fetch(`${API_BASE}/api/documents/filter?${params.toString()}`);
         const data = await response.json();
@@ -226,9 +574,21 @@ async function applyDocumentFilters() {
         loadingDiv.style.display = 'none';
 
         if (data.success && data.documents && data.documents.length > 0) {
-            contentDiv.innerHTML = data.documents.map(doc => createDocumentCard(doc)).join('');
+            // Apply document limit
+            const totalCount = data.documents.length;
+            const displayDocuments = documentLimit ? data.documents.slice(0, documentLimit) : data.documents;
+
+            contentDiv.innerHTML = displayDocuments.map(doc => createDocumentCard(doc)).join('');
+
+            // Show count with limit info
+            if (documentLimit && totalCount > documentLimit) {
+                countDiv.textContent = `${displayDocuments.length} ${t('documents.of')} ${totalCount} ${t('documents.documents_found')}`;
+            } else {
+                countDiv.textContent = `${totalCount} ${t('documents.documents_found')}`;
+            }
         } else {
             contentDiv.innerHTML = `<p class="text-muted">${t('documents.no_documents')}</p>`;
+            countDiv.textContent = '';
         }
     } catch (error) {
         loadingDiv.style.display = 'none';
@@ -244,6 +604,10 @@ function clearDocumentFilters() {
     document.getElementById('filterDocumentType').value = '';
     document.getElementById('filterDateFrom').value = '';
     document.getElementById('filterDateTo').value = '';
+
+    // Reset sorting to default (descending)
+    idSortOrder = 'desc';
+    document.getElementById('sortIcon').textContent = '⬇️';
 
     // Reload documents based on settings
     loadDocumentsByFilterTags();
@@ -426,12 +790,22 @@ async function loadDocumentsByTag() {
 
 // Create Document Card HTML
 function createDocumentCard(doc) {
+    // Build Paperless document URL
+    const paperlessDocUrl = paperlessUrl ? `${paperlessUrl}/documents/${doc.id}/details` : '#';
+
     return `
         <div class="card document-card">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
+                <div class="d-flex align-items-start">
+                    <div class="form-check me-3">
+                        <input class="form-check-input document-checkbox" type="checkbox" value="${doc.id}" id="doc-${doc.id}" onchange="updateBulkSelectionUI()">
+                    </div>
                     <div class="flex-grow-1">
-                        <h6 class="card-title">${doc.title || t('documents.untitled')}</h6>
+                        <h6 class="card-title">
+                            <a href="${paperlessDocUrl}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                                ${doc.title || t('documents.untitled')}
+                            </a>
+                        </h6>
                         <p class="card-text text-muted small">
                             ${t('documents.id')}: ${doc.id} |
                             ${t('documents.created')}: ${new Date(doc.created).toLocaleDateString()}
@@ -719,6 +1093,26 @@ async function applyMetadata(documentId, suggestedMetadata) {
     }
 }
 
+// Toggle token edit mode
+function toggleTokenEdit(fieldId) {
+    const field = document.getElementById(fieldId);
+    const btn = document.getElementById(`edit${fieldId.charAt(0).toUpperCase() + fieldId.slice(1)}Btn`);
+
+    if (field.readOnly) {
+        // Unlock field
+        field.readOnly = false;
+        field.value = '';
+        field.placeholder = fieldId === 'paperlessToken' ? t('settings.paperless_token_placeholder') : 'sk-...';
+        field.classList.remove('bg-light');
+        btn.innerHTML = '🔒';
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-outline-success');
+    } else {
+        // Lock field (reload settings to restore locked state)
+        loadSettings();
+    }
+}
+
 // Load Settings
 async function loadSettings() {
     try {
@@ -731,11 +1125,45 @@ async function loadSettings() {
         });
 
         document.getElementById('paperlessUrl').value = settingsMap['paperless_url'] || '';
-        document.getElementById('paperlessToken').value = settingsMap['paperless_token'] === '***ENCRYPTED***' ? '' : settingsMap['paperless_token'];
-        document.getElementById('openaiKey').value = settingsMap['openai_api_key'] === '***ENCRYPTED***' ? '' : settingsMap['openai_api_key'];
         document.getElementById('openaiModel').value = settingsMap['openai_model'] || 'gpt-4-turbo-preview';
         document.getElementById('maxTextLength').value = settingsMap['max_text_length'] || '10000';
         document.getElementById('displayTextLength').value = settingsMap['display_text_length'] || '5000';
+
+        // Handle Paperless Token
+        const paperlessToken = document.getElementById('paperlessToken');
+        const paperlessBtn = document.getElementById('editPaperlessTokenBtn');
+        if (settingsMap['paperless_token'] === '***ENCRYPTED***') {
+            paperlessToken.value = '';
+            paperlessToken.placeholder = t('settings.token_is_set');
+            paperlessToken.readOnly = true;
+            paperlessToken.classList.add('bg-light');
+            paperlessBtn.innerHTML = '🔓';
+            paperlessBtn.classList.remove('btn-outline-success');
+            paperlessBtn.classList.add('btn-outline-secondary');
+        } else {
+            paperlessToken.value = settingsMap['paperless_token'] || '';
+            paperlessToken.readOnly = false;
+            paperlessToken.classList.remove('bg-light');
+            paperlessBtn.innerHTML = '🔓';
+        }
+
+        // Handle OpenAI Key
+        const openaiKey = document.getElementById('openaiKey');
+        const openaiBtn = document.getElementById('editOpenaiKeyBtn');
+        if (settingsMap['openai_api_key'] === '***ENCRYPTED***') {
+            openaiKey.value = '';
+            openaiKey.placeholder = t('settings.key_is_set');
+            openaiKey.readOnly = true;
+            openaiKey.classList.add('bg-light');
+            openaiBtn.innerHTML = '🔓';
+            openaiBtn.classList.remove('btn-outline-success');
+            openaiBtn.classList.add('btn-outline-secondary');
+        } else {
+            openaiKey.value = settingsMap['openai_api_key'] || '';
+            openaiKey.readOnly = false;
+            openaiKey.classList.remove('bg-light');
+            openaiBtn.innerHTML = '🔓';
+        }
 
         // Load modular prompts
         await loadModularPrompts();
@@ -1391,6 +1819,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateLanguageButton();
     translateUI();
 
+    // Load Paperless URL for document links
+    await loadPaperlessUrl();
+
     // Load initial data
     loadTags();
+
+    // Toggle bulk processing tag select based on checkbox
+    const bulkAddTagCheckbox = document.getElementById('bulkAddProcessingTag');
+    if (bulkAddTagCheckbox) {
+        bulkAddTagCheckbox.addEventListener('change', (e) => {
+            document.getElementById('bulkProcessingTagSelect').disabled = !e.target.checked;
+        });
+    }
 });

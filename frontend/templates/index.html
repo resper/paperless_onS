@@ -105,6 +105,31 @@
                                 </div>
                             </div>
 
+                            <!-- ID Sort Toggle Button and Document Limit -->
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="form-check me-3">
+                                        <input class="form-check-input" type="checkbox" id="selectAllDocuments" onchange="toggleSelectAll()" data-i18n-title="documents.select_all" title="Alle auswählen">
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="sortToggleBtn" onclick="toggleIdSort()" data-i18n-title="documents.sort_by_id" title="Nach ID sortieren">
+                                        <span id="sortIcon">⬇️</span>
+                                    </button>
+                                    <h6 class="mb-0 text-muted" id="documentCount"></h6>
+                                    <button type="button" class="btn btn-sm btn-success ms-3" id="bulkProcessBtn" onclick="startBulkProcessing()" style="display: none;">
+                                        <span data-i18n="documents.bulk_process">Ausgewählte analysieren</span> (<span id="selectedCount">0</span>)
+                                    </button>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <label for="documentLimit" class="form-label mb-0 me-2 text-muted small" data-i18n="documents.show_limit">Anzeigen:</label>
+                                    <select class="form-select form-select-sm" id="documentLimit" onchange="changeDocumentLimit()" style="width: auto;">
+                                        <option value="25">25</option>
+                                        <option value="50" selected>50</option>
+                                        <option value="100">100</option>
+                                        <option value="all" data-i18n="documents.show_all">Alle</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <!-- Documents Loading/Content -->
                             <div id="documentsLoading" class="text-center" style="display: none;">
                                 <div class="spinner-border text-primary" role="status">
@@ -158,15 +183,25 @@
                                         </div>
                                         <div class="mb-3">
                                             <label for="paperlessToken" class="form-label" data-i18n="settings.paperless_token">Paperless API Token</label>
-                                            <input type="password" class="form-control" id="paperlessToken"
-                                                   data-i18n-placeholder="settings.paperless_token_placeholder"
-                                                   placeholder="Enter your Paperless token">
+                                            <div class="input-group">
+                                                <input type="password" class="form-control" id="paperlessToken"
+                                                       data-i18n-placeholder="settings.paperless_token_placeholder"
+                                                       placeholder="Enter your Paperless token">
+                                                <button class="btn btn-outline-secondary" type="button" id="editPaperlessTokenBtn" onclick="toggleTokenEdit('paperlessToken')" data-i18n="settings.edit_token" title="Token bearbeiten">
+                                                    🔓
+                                                </button>
+                                            </div>
                                             <div class="form-text" data-i18n="settings.paperless_token_help">Authentication token from Paperless-NGX</div>
                                         </div>
                                         <div class="mb-3">
                                             <label for="openaiKey" class="form-label" data-i18n="settings.openai_api_key">OpenAI API Key</label>
-                                            <input type="password" class="form-control" id="openaiKey"
-                                                   placeholder="sk-...">
+                                            <div class="input-group">
+                                                <input type="password" class="form-control" id="openaiKey"
+                                                       placeholder="sk-...">
+                                                <button class="btn btn-outline-secondary" type="button" id="editOpenaiKeyBtn" onclick="toggleTokenEdit('openaiKey')" data-i18n="settings.edit_token" title="Schlüssel bearbeiten">
+                                                    🔓
+                                                </button>
+                                            </div>
                                             <div class="form-text" data-i18n="settings.openai_api_key_help">Your OpenAI API key</div>
                                         </div>
                                         <div class="mb-3">
@@ -561,6 +596,99 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Cancel</button>
                     <button type="button" class="btn btn-success" onclick="saveNewConfiguration()" data-i18n="prompt.save_config">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Processing Configuration Modal -->
+    <div class="modal fade" id="bulkProcessingConfigModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="documents.bulk_config_title">Bulk Processing Configuration</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small" data-i18n="documents.bulk_config_help">
+                        Select which metadata fields should be updated for the selected documents.
+                    </p>
+
+                    <h6 class="mb-3" data-i18n="documents.select_fields_to_update">Select fields to update:</h6>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateTitle" checked>
+                        <label class="form-check-label" for="bulkUpdateTitle" data-i18n="processing.suggested_title">
+                            Title
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateDate" checked>
+                        <label class="form-check-label" for="bulkUpdateDate" data-i18n="processing.document_date">
+                            Document Date
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateCorrespondent" checked>
+                        <label class="form-check-label" for="bulkUpdateCorrespondent" data-i18n="processing.correspondent">
+                            Correspondent
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateDocumentType" checked>
+                        <label class="form-check-label" for="bulkUpdateDocumentType" data-i18n="processing.document_type">
+                            Document Type
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateKeywords" checked>
+                        <label class="form-check-label" for="bulkUpdateKeywords" data-i18n="processing.content_keywords">
+                            Content Keywords
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateTags" checked>
+                        <label class="form-check-label" for="bulkUpdateTags" data-i18n="processing.suggested_tags">
+                            Tags
+                        </label>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="mb-3" data-i18n="documents.tag_options">Tag Options:</h6>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkClearExistingTags">
+                        <label class="form-check-label" for="bulkClearExistingTags" data-i18n="processing.clear_existing_tags">
+                            Clear existing tags
+                        </label>
+                    </div>
+                    <small class="form-text text-muted d-block mb-3" data-i18n="processing.clear_existing_tags_help">
+                        If enabled, all existing document tags will be removed before adding the new tags
+                    </small>
+
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkAddProcessingTag">
+                        <label class="form-check-label" for="bulkAddProcessingTag" data-i18n="documents.add_bulk_tag">
+                            Add tag to mark bulk processed documents
+                        </label>
+                    </div>
+                    <select class="form-select form-select-sm mt-2" id="bulkProcessingTagSelect" disabled>
+                        <option value="" data-i18n="documents.select_tag">Select a tag...</option>
+                        <!-- Tags will be loaded dynamically -->
+                    </select>
+                    <small class="form-text text-muted d-block mt-1" data-i18n="documents.bulk_tag_help">
+                        This tag will be added to all processed documents for identification
+                    </small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="confirmBulkProcessing()" data-i18n="documents.start_processing">Start Processing</button>
                 </div>
             </div>
         </div>
