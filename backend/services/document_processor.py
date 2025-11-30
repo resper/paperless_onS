@@ -78,6 +78,7 @@ class DocumentProcessor:
                         "prompt_document_date",
                         "prompt_correspondent",
                         "prompt_document_type",
+                        "prompt_storage_path",
                         "prompt_content_keywords",
                         "prompt_suggested_title",
                         "prompt_suggested_tag"
@@ -102,7 +103,7 @@ class DocumentProcessor:
 
             # Build modular prompts dict
             modular_prompts = {}
-            for key in ["document_date", "correspondent", "document_type", "content_keywords", "suggested_title", "suggested_tag"]:
+            for key in ["document_date", "correspondent", "document_type", "storage_path", "content_keywords", "suggested_title", "suggested_tag"]:
                 prompt_key = f"prompt_{key}"
                 if prompt_key in settings_dict and settings_dict[prompt_key]:
                     modular_prompts[key] = settings_dict[prompt_key]
@@ -209,7 +210,13 @@ class DocumentProcessor:
             if doc_types_result["success"]:
                 available_document_types = doc_types_result["document_types"]
 
-            # Step 2.7: Get available tags from Paperless
+            # Step 2.7: Get available storage paths from Paperless
+            storage_paths_result = await self.paperless_client.get_storage_paths()
+            available_storage_paths = []
+            if storage_paths_result["success"]:
+                available_storage_paths = storage_paths_result["storage_paths"]
+
+            # Step 2.8: Get available tags from Paperless
             tags_result = await self.paperless_client.get_tags()
             available_tags = []
             if tags_result["success"]:
@@ -223,6 +230,7 @@ class DocumentProcessor:
                 current_metadata=document,
                 available_correspondents=available_correspondents,
                 available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
                 available_tags=available_tags,
                 text_source_mode=text_source_mode
             )
@@ -300,7 +308,9 @@ class DocumentProcessor:
                     "extracted_text": analysis_result.get("extracted_text", "")[:self.display_text_length],
                     "full_analysis": analysis_result.get("analysis"),
                     "suggested_metadata": analysis_result.get("suggested_metadata"),
-                    "tokens_used": analysis_result.get("tokens_used", 0)
+                    "tokens_used": analysis_result.get("tokens_used", 0),
+                    "text_source": analysis_result.get("text_source"),
+                    "text_source_info": analysis_result.get("text_source_info")
                 },
                 "metadata_updated": False
             }
@@ -362,14 +372,16 @@ class DocumentProcessor:
             # Fetch only the lists we actually need
             need_correspondents = "correspondent" in suggested_metadata
             need_doc_types = "document_type" in suggested_metadata
+            need_storage_paths = "storage_path" in suggested_metadata
             need_tags = "suggested_tags" in suggested_metadata
 
             # Fetch lists in parallel if multiple are needed
             correspondents = []
             document_types = []
+            storage_paths = []
             tags = []
 
-            if need_correspondents or need_doc_types or need_tags:
+            if need_correspondents or need_doc_types or need_storage_paths or need_tags:
                 # Fetch needed lists concurrently
                 import asyncio
                 tasks = []
@@ -378,6 +390,8 @@ class DocumentProcessor:
                     tasks.append(self.paperless_client.get_correspondents())
                 if need_doc_types:
                     tasks.append(self.paperless_client.get_document_types())
+                if need_storage_paths:
+                    tasks.append(self.paperless_client.get_storage_paths())
                 if need_tags:
                     tasks.append(self.paperless_client.get_tags())
 
@@ -392,6 +406,10 @@ class DocumentProcessor:
                 if need_doc_types:
                     if results[result_idx]["success"]:
                         document_types = results[result_idx]["document_types"]
+                    result_idx += 1
+                if need_storage_paths:
+                    if results[result_idx]["success"]:
+                        storage_paths = results[result_idx]["storage_paths"]
                     result_idx += 1
                 if need_tags:
                     if results[result_idx]["success"]:
@@ -413,8 +431,16 @@ class DocumentProcessor:
                         update_data["document_type"] = dt["id"]
                         break
 
+            # Resolve storage path name to ID
+            if "storage_path" in suggested_metadata and storage_paths:
+                storage_path_name = suggested_metadata["storage_path"]
+                for sp in storage_paths:
+                    if sp["name"].lower() == storage_path_name.lower():
+                        update_data["storage_path"] = sp["id"]
+                        break
+
             # Handle tags
-            if "suggested_tags" in suggested_metadata and tags:
+            if ("suggested_tags" in suggested_metadata and tags) or "bulk_processing_tag_id" in suggested_metadata:
                 tag_ids = []
 
                 # Check if existing tags should be cleared
@@ -424,17 +450,24 @@ class DocumentProcessor:
                 if not clear_existing_tags:
                     tag_ids = current_doc.get("tags", []).copy()
 
-                # Add new tags
-                suggested_tag_names = suggested_metadata["suggested_tags"]
-                if isinstance(suggested_tag_names, str):
-                    suggested_tag_names = [suggested_tag_names]
+                # Add new tags from suggested_tags (tag names)
+                if "suggested_tags" in suggested_metadata and tags:
+                    suggested_tag_names = suggested_metadata["suggested_tags"]
+                    if isinstance(suggested_tag_names, str):
+                        suggested_tag_names = [suggested_tag_names]
 
-                for tag_name in suggested_tag_names:
-                    for tag in tags:
-                        if tag["name"].lower() == tag_name.lower():
-                            if tag["id"] not in tag_ids:
-                                tag_ids.append(tag["id"])
-                            break
+                    for tag_name in suggested_tag_names:
+                        for tag in tags:
+                            if tag["name"].lower() == tag_name.lower():
+                                if tag["id"] not in tag_ids:
+                                    tag_ids.append(tag["id"])
+                                break
+
+                # Add bulk processing tag (already have the ID)
+                if "bulk_processing_tag_id" in suggested_metadata:
+                    bulk_tag_id = int(suggested_metadata["bulk_processing_tag_id"])
+                    if bulk_tag_id not in tag_ids:
+                        tag_ids.append(bulk_tag_id)
 
                 update_data["tags"] = tag_ids
 

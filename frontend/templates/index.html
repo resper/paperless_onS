@@ -83,6 +83,15 @@
                                             </select>
                                         </div>
 
+                                        <!-- Storage Path Filter -->
+                                        <div class="col-md-3">
+                                            <label for="filterStoragePath" class="form-label" data-i18n="documents.filter_by_storage_path">Nach Speicherort filtern</label>
+                                            <select class="form-select form-select-sm" id="filterStoragePath">
+                                                <option value="" data-i18n="documents.all_storage_paths">Alle Speicherorte</option>
+                                                <!-- Storage paths will be loaded dynamically -->
+                                            </select>
+                                        </div>
+
                                         <!-- Date Filter -->
                                         <div class="col-md-3">
                                             <label class="form-label" data-i18n="documents.filter_by_date">Nach Datum filtern</label>
@@ -229,24 +238,6 @@
                             <div class="card border-top-0 rounded-top-0">
                                 <div class="card-body">
                                     <form id="processingSettingsForm">
-                                        <!-- Text Extraction Mode -->
-                                        <div class="mb-4">
-                                            <label class="form-label" data-i18n="processing_settings.text_source">Text Source for AI Analysis</label>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="textSourceMode" id="textSourcePaperless" value="paperless" checked>
-                                                <label class="form-check-label" for="textSourcePaperless" data-i18n="processing_settings.text_source_paperless">
-                                                    Use text extracted by Paperless-NGX (OCR)
-                                                </label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="radio" name="textSourceMode" id="textSourceAI" value="ai_ocr">
-                                                <label class="form-check-label" for="textSourceAI" data-i18n="processing_settings.text_source_ai">
-                                                    Send document file to AI for text recognition (Vision API)
-                                                </label>
-                                            </div>
-                                            <div class="form-text" data-i18n="processing_settings.text_source_help">Choose whether to use Paperless OCR text or let the AI extract text from the document image.</div>
-                                        </div>
-
                                         <!-- Text Preview Limit -->
                                         <div class="mb-4">
                                             <label for="displayTextLength" class="form-label" data-i18n="processing_settings.display_text_length">Text Preview Limit</label>
@@ -320,6 +311,30 @@
                                             <div class="form-text" data-i18n="auto_processing.filter_tag_help">
                                                 Documents with this tag will be automatically processed
                                             </div>
+                                        </div>
+
+                                        <!-- Text Source Selection -->
+                                        <div class="mb-4">
+                                            <label class="form-label" data-i18n="auto_processing.text_source">Text Source for Automatic Processing</label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="autoTextSourceMode" id="autoTextSourcePaperless" value="paperless" checked>
+                                                <label class="form-check-label" for="autoTextSourcePaperless" data-i18n="auto_processing.text_source_paperless">
+                                                    Use text from Paperless-NGX
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="autoTextSourceMode" id="autoTextSourceSmart" value="smart">
+                                                <label class="form-check-label" for="autoTextSourceSmart" data-i18n="auto_processing.text_source_smart">
+                                                    Extract text from PDF, use Vision API for images
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="autoTextSourceMode" id="autoTextSourceVision" value="vision">
+                                                <label class="form-check-label" for="autoTextSourceVision" data-i18n="auto_processing.text_source_vision">
+                                                    Always send PDF to Vision API
+                                                </label>
+                                            </div>
+                                            <div class="form-text" data-i18n="auto_processing.text_source_help">Choose how text should be extracted for AI analysis.</div>
                                         </div>
 
                                         <hr>
@@ -427,6 +442,14 @@
                                                     <span data-i18n="prompt.field_document_type">Document Type</span>
                                                 </label>
                                                 <textarea class="form-control font-monospace" id="promptDocumentType" rows="3"></textarea>
+                                            </div>
+
+                                            <!-- Storage Path -->
+                                            <div class="mb-3">
+                                                <label for="promptStoragePath" class="form-label">
+                                                    <span data-i18n="prompt.field_storage_path">Storage Path</span>
+                                                </label>
+                                                <textarea class="form-control font-monospace" id="promptStoragePath" rows="3"></textarea>
                                             </div>
 
                                             <!-- Content Keywords -->
@@ -645,6 +668,13 @@
                     </div>
 
                     <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="bulkUpdateStoragePath" checked>
+                        <label class="form-check-label" for="bulkUpdateStoragePath" data-i18n="processing.storage_path">
+                            Storage Path
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="bulkUpdateKeywords" checked>
                         <label class="form-check-label" for="bulkUpdateKeywords" data-i18n="processing.content_keywords">
                             Content Keywords
@@ -689,6 +719,52 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">Cancel</button>
                     <button type="button" class="btn btn-success" onclick="confirmBulkProcessing()" data-i18n="documents.start_processing">Start Processing</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Source Selection Modal -->
+    <div class="modal fade" id="textSourceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" data-i18n="text_source.modal_title">Select Text Source</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3" data-i18n="text_source.modal_subtitle">How should the text be extracted for AI analysis?</p>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="textSourceOption" id="textSourceOptionPaperless" value="paperless" checked>
+                        <label class="form-check-label" for="textSourceOptionPaperless">
+                            <strong data-i18n="text_source.option_paperless">Use text from Paperless-NGX</strong>
+                            <br>
+                            <small class="text-muted" data-i18n="text_source.option_paperless_help">Uses text already extracted by Paperless-NGX (OCR). Fast and cost-effective.</small>
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="textSourceOption" id="textSourceOptionSmart" value="smart">
+                        <label class="form-check-label" for="textSourceOptionSmart">
+                            <strong data-i18n="text_source.option_smart">Extract text from PDF, use Vision API for images</strong>
+                            <br>
+                            <small class="text-muted" data-i18n="text_source.option_smart_help">Tries to extract text from PDF first. If not possible or an image, uses Vision API. Smart choice.</small>
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="radio" name="textSourceOption" id="textSourceOptionVision" value="vision">
+                        <label class="form-check-label" for="textSourceOptionVision">
+                            <strong data-i18n="text_source.option_vision">Always send PDF to Vision API</strong>
+                            <br>
+                            <small class="text-muted" data-i18n="text_source.option_vision_help">Always sends document as image to Vision API for OCR. Best quality, higher cost.</small>
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="text_source.cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="continueWithTextSource()" data-i18n="text_source.continue">Continue with Analysis</button>
                 </div>
             </div>
         </div>

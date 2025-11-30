@@ -88,6 +88,7 @@ async def filter_documents(
     tags: Optional[List[int]] = Query(default=None),
     correspondent: Optional[int] = Query(default=None),
     document_type: Optional[int] = Query(default=None),
+    storage_path: Optional[int] = Query(default=None),
     created_after: Optional[str] = Query(default=None),
     created_before: Optional[str] = Query(default=None),
     ordering: Optional[str] = Query(default="-id")
@@ -99,6 +100,7 @@ async def filter_documents(
         tags: List of tag IDs (optional, multiple)
         correspondent: Correspondent ID (optional)
         document_type: Document type ID (optional)
+        storage_path: Storage path ID (optional)
         created_after: Date string YYYY-MM-DD (optional)
         created_before: Date string YYYY-MM-DD (optional)
         ordering: Sort order field (optional, default: -id)
@@ -123,6 +125,9 @@ async def filter_documents(
 
         if document_type:
             params["document_type__id"] = document_type
+
+        if storage_path:
+            params["storage_path__id"] = storage_path
 
         if created_after:
             params["created__date__gte"] = created_after

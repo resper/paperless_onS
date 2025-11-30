@@ -42,7 +42,7 @@ async def get_placeholders(accept_language: Optional[str] = Header(default="en")
 
     placeholders = []
     for key in ["filename", "current_title", "extracted_text", "text_length", "max_text_length",
-                "available_correspondents", "available_document_types", "available_tags"]:
+                "available_correspondents", "available_document_types", "available_storage_paths", "available_tags"]:
         placeholder_data = placeholder_translations.get(key, {})
         placeholders.append({
             "placeholder": f"{{{key}}}",
@@ -234,6 +234,7 @@ class ModularPromptTestRequest(BaseModel):
     document_date: Optional[str] = ""
     correspondent: Optional[str] = ""
     document_type: Optional[str] = ""
+    storage_path: Optional[str] = ""
     content_keywords: Optional[str] = ""
     suggested_title: Optional[str] = ""
     suggested_tag: Optional[str] = ""
@@ -245,6 +246,7 @@ class ModularPromptsRequest(BaseModel):
     document_date: Optional[str] = ""
     correspondent: Optional[str] = ""
     document_type: Optional[str] = ""
+    storage_path: Optional[str] = ""
     content_keywords: Optional[str] = ""
     suggested_title: Optional[str] = ""
     suggested_tag: Optional[str] = ""
@@ -263,6 +265,7 @@ async def get_modular_prompts():
                         "prompt_document_date",
                         "prompt_correspondent",
                         "prompt_document_type",
+                        "prompt_storage_path",
                         "prompt_content_keywords",
                         "prompt_suggested_title",
                         "prompt_suggested_tag",
@@ -285,6 +288,7 @@ async def get_modular_prompts():
                 "document_date": settings_dict.get("prompt_document_date", ""),
                 "correspondent": settings_dict.get("prompt_correspondent", ""),
                 "document_type": settings_dict.get("prompt_document_type", ""),
+                "storage_path": settings_dict.get("prompt_storage_path", ""),
                 "content_keywords": settings_dict.get("prompt_content_keywords", ""),
                 "suggested_title": settings_dict.get("prompt_suggested_title", ""),
                 "suggested_tag": settings_dict.get("prompt_suggested_tag", ""),
@@ -309,6 +313,7 @@ async def save_modular_prompts(request: ModularPromptsRequest):
                 "prompt_document_date": request.document_date or "",
                 "prompt_correspondent": request.correspondent or "",
                 "prompt_document_type": request.document_type or "",
+                "prompt_storage_path": request.storage_path or "",
                 "prompt_content_keywords": request.content_keywords or "",
                 "prompt_suggested_title": request.suggested_title or "",
                 "prompt_suggested_tag": request.suggested_tag or "",
@@ -351,6 +356,7 @@ async def get_default_modular_prompts():
         "document_date": "Extract the document date in YYYY-MM-DD format. Look for issue date, creation date, or document date.",
         "correspondent": "Identify who this document is from/to (company, person, or organization). Select a matching correspondent from the available correspondents list above. Only if there is no matching correspondent, suggest a new one.",
         "document_type": "Identify the document type. Select a matching document type from the available document types list above. Only if there is no matching document type, suggest a new one.",
+        "storage_path": "Identify the most appropriate storage location for this document. Select a matching storage path from the available storage paths list above. If no storage path matches, leave the field empty or return null.",
         "content_keywords": "Provide 1-3 keywords (max 3 words) describing WHAT the document is about. DO NOT repeat the document type. Describe the CONTENT/PURPOSE, not the type.",
         "suggested_title": "Create a title in this exact format: YYYY-MM-DD - Correspondent - Document Type - Content Keywords. Example: '2025-01-15 - ACME Corp - Invoice - Server Hosting'",
         "suggested_tag": "Select 3-5 matching tags from the available tags list above. If there are no matching tags, suggest suitable ones. Return them as an array in the JSON response.",
@@ -447,6 +453,7 @@ async def test_modular_prompt(request: ModularPromptTestRequest):
             "document_date": request.document_date,
             "correspondent": request.correspondent,
             "document_type": request.document_type,
+            "storage_path": request.storage_path,
             "content_keywords": request.content_keywords,
             "suggested_title": request.suggested_title,
             "suggested_tag": request.suggested_tag,
@@ -505,6 +512,7 @@ class PromptConfigurationRequest(BaseModel):
     document_date: Optional[str] = ""
     correspondent: Optional[str] = ""
     document_type: Optional[str] = ""
+    storage_path: Optional[str] = ""
     content_keywords: Optional[str] = ""
     suggested_title: Optional[str] = ""
     suggested_tag: Optional[str] = ""
@@ -518,6 +526,7 @@ class PromptConfigurationResponse(BaseModel):
     document_date: str
     correspondent: str
     document_type: str
+    storage_path: str
     content_keywords: str
     suggested_title: str
     suggested_tag: str
@@ -544,6 +553,7 @@ async def get_all_configurations():
                     "document_date": config.document_date or "",
                     "correspondent": config.correspondent or "",
                     "document_type": config.document_type or "",
+                    "storage_path": config.storage_path or "",
                     "content_keywords": config.content_keywords or "",
                     "suggested_title": config.suggested_title or "",
                     "suggested_tag": config.suggested_tag or "",
@@ -582,6 +592,7 @@ async def get_configuration(config_id: int):
                     "document_date": config.document_date or "",
                     "correspondent": config.correspondent or "",
                     "document_type": config.document_type or "",
+                    "storage_path": config.storage_path or "",
                     "content_keywords": config.content_keywords or "",
                     "suggested_title": config.suggested_title or "",
                     "suggested_tag": config.suggested_tag or "",
@@ -620,6 +631,7 @@ async def create_configuration(request: PromptConfigurationRequest):
                 document_date=request.document_date or "",
                 correspondent=request.correspondent or "",
                 document_type=request.document_type or "",
+                storage_path=request.storage_path or "",
                 content_keywords=request.content_keywords or "",
                 suggested_title=request.suggested_title or "",
                 suggested_tag=request.suggested_tag or "",
@@ -677,6 +689,7 @@ async def update_configuration(config_id: int, request: PromptConfigurationReque
             config.document_date = request.document_date or ""
             config.correspondent = request.correspondent or ""
             config.document_type = request.document_type or ""
+            config.storage_path = request.storage_path or ""
             config.content_keywords = request.content_keywords or ""
             config.suggested_title = request.suggested_title or ""
             config.suggested_tag = request.suggested_tag or ""

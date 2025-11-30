@@ -109,69 +109,52 @@ class OpenAIDocumentAnalyzer:
         # For now, we'll rely on text extraction
         return []
 
-    async def analyze_document(
+    async def _analyze_with_text(
         self,
-        document_content: bytes,
+        extracted_text: str,
         filename: str,
-        content_type: str,
-        current_metadata: Optional[Dict[str, Any]] = None,
+        current_title: str,
         available_correspondents: Optional[list] = None,
         available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
         available_tags: Optional[list] = None,
-        text_source_mode: str = "paperless"
+        start_time: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """
-        Analyze document and extract/enhance metadata
+        Analyze document using text-based API (for extracted PDF text or Paperless text)
 
         Args:
-            document_content: Document file content
+            extracted_text: Extracted text content
             filename: Original filename
-            content_type: MIME type of document
-            current_metadata: Current metadata from Paperless-NGX
-            available_correspondents: List of available correspondents from Paperless-NGX
-            available_document_types: List of available document types from Paperless-NGX
-            available_tags: List of available tags from Paperless-NGX
-            text_source_mode: "paperless" to use Paperless OCR text, "ai_ocr" to use Vision API
+            current_title: Current title from Paperless
+            available_correspondents: List of available correspondents
+            available_document_types: List of available document types
+            available_storage_paths: List of available storage paths
+            available_tags: List of available tags
+            start_time: Start time for duration tracking
 
         Returns:
             Dict with analysis results and suggested metadata
         """
-        start_time = datetime.now()
+        if start_time is None:
+            start_time = datetime.now()
 
         try:
-            current_title = current_metadata.get("title", "") if current_metadata else ""
-            current_content = current_metadata.get("content", "") if current_metadata else ""
-
-            # Determine text source based on mode
-            if text_source_mode == "ai_ocr":
-                # Use Vision API to extract text from document
-                return await self._analyze_with_vision(
-                    document_content=document_content,
-                    filename=filename,
-                    content_type=content_type,
-                    current_title=current_title,
-                    available_correspondents=available_correspondents,
-                    available_document_types=available_document_types,
-                    available_tags=available_tags
-                )
-
-            # Default: Use text already extracted by Paperless-NGX
-            extracted_text = current_content if current_content else "No text extracted by Paperless-NGX"
-
             # Build prompt for document analysis
             prompt = self._build_analysis_prompt(
                 extracted_text=extracted_text,
                 current_title=current_title,
-                current_content=current_content,
+                current_content=extracted_text,
                 filename=filename,
                 available_correspondents=available_correspondents,
                 available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
                 available_tags=available_tags
             )
 
             # Log the complete prompt for debugging
             print("\n" + "="*80)
-            print("📝 GENERATED PROMPT FOR DOCUMENT ANALYSIS")
+            print("📝 GENERATED PROMPT FOR TEXT-BASED DOCUMENT ANALYSIS")
             print("="*80)
             print("\n🔹 SYSTEM PROMPT:")
             print("-" * 80)
@@ -270,6 +253,144 @@ class OpenAIDocumentAnalyzer:
                 "message": f"Error analyzing document: {str(e)}"
             }
 
+    async def analyze_document(
+        self,
+        document_content: bytes,
+        filename: str,
+        content_type: str,
+        current_metadata: Optional[Dict[str, Any]] = None,
+        available_correspondents: Optional[list] = None,
+        available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
+        available_tags: Optional[list] = None,
+        text_source_mode: str = "paperless"
+    ) -> Dict[str, Any]:
+        """
+        Analyze document and extract/enhance metadata
+
+        Args:
+            document_content: Document file content
+            filename: Original filename
+            content_type: MIME type of document
+            current_metadata: Current metadata from Paperless-NGX
+            available_correspondents: List of available correspondents from Paperless-NGX
+            available_document_types: List of available document types from Paperless-NGX
+            available_storage_paths: List of available storage paths from Paperless-NGX
+            available_tags: List of available tags from Paperless-NGX
+            text_source_mode: "paperless" to use Paperless OCR text, "smart" to try PDF extraction first, "vision" to always use Vision API
+
+        Returns:
+            Dict with analysis results and suggested metadata
+        """
+        start_time = datetime.now()
+
+        try:
+            current_title = current_metadata.get("title", "") if current_metadata else ""
+            current_content = current_metadata.get("content", "") if current_metadata else ""
+
+            # Smart mode: Try PDF text extraction first, fallback to Vision API
+            if text_source_mode == "smart":
+                is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
+
+                if is_pdf:
+                    # Try to extract text from PDF
+                    extracted_text = self._extract_text_from_pdf(document_content)
+
+                    # Check if extraction was successful (more than 100 characters)
+                    if extracted_text and len(extracted_text.strip()) > 100:
+                        print(f"\n✅ SMART MODE: Text erfolgreich aus PDF extrahiert ({len(extracted_text)} Zeichen)")
+                        print(f"   → Verwende Text-basierte Analyse (günstiger, schneller)")
+
+                        # Use text-based analysis with extracted text
+                        result = await self._analyze_with_text(
+                            extracted_text=extracted_text,
+                            filename=filename,
+                            current_title=current_title,
+                            available_correspondents=available_correspondents,
+                            available_document_types=available_document_types,
+                            available_storage_paths=available_storage_paths,
+                            available_tags=available_tags,
+                            start_time=start_time
+                        )
+                        # Add text source indicator
+                        result["text_source"] = "pdf_extraction"
+                        result["text_source_info"] = "Text wurde erfolgreich aus PDF extrahiert"
+                        return result
+                    else:
+                        print(f"\n⚠️  SMART MODE: PDF Text-Extraktion fehlgeschlagen oder zu wenig Text ({len(extracted_text) if extracted_text else 0} Zeichen)")
+                        print(f"   → Fallback zu Vision API für bessere OCR")
+
+                # If not PDF or text extraction failed, use Vision API
+                print(f"\n🔄 SMART MODE: Verwende Vision API für OCR")
+                result = await self._analyze_with_vision(
+                    document_content=document_content,
+                    filename=filename,
+                    content_type=content_type,
+                    current_title=current_title,
+                    available_correspondents=available_correspondents,
+                    available_document_types=available_document_types,
+                    available_storage_paths=available_storage_paths,
+                    available_tags=available_tags
+                )
+                # Add text source indicator
+                if "text_source" not in result:
+                    result["text_source"] = "vision_api"
+                result["text_source_info"] = "Vision API wurde für OCR verwendet (PDF war gescannt oder Bilddatei)"
+                return result
+
+            # Vision mode: Always use Vision API
+            if text_source_mode == "vision":
+                print(f"\n🎨 VISION MODE: Verwende immer Vision API (wie gewünscht)")
+                result = await self._analyze_with_vision(
+                    document_content=document_content,
+                    filename=filename,
+                    content_type=content_type,
+                    current_title=current_title,
+                    available_correspondents=available_correspondents,
+                    available_document_types=available_document_types,
+                    available_storage_paths=available_storage_paths,
+                    available_tags=available_tags
+                )
+                # Add text source indicator
+                if "text_source" not in result:
+                    result["text_source"] = "vision_api"
+                result["text_source_info"] = "Vision API wurde verwendet (vom Benutzer gewählt)"
+                return result
+
+            # Default/Paperless mode: Use text already extracted by Paperless-NGX
+            print(f"\n📄 PAPERLESS MODE: Verwende von Paperless-NGX extrahierten Text")
+            extracted_text = current_content if current_content else "No text extracted by Paperless-NGX"
+
+            # Use text-based analysis
+            result = await self._analyze_with_text(
+                extracted_text=extracted_text,
+                filename=filename,
+                current_title=current_title,
+                available_correspondents=available_correspondents,
+                available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
+                available_tags=available_tags,
+                start_time=start_time
+            )
+            # Add text source indicator
+            result["text_source"] = "paperless"
+            result["text_source_info"] = "Text wurde von Paperless-NGX verwendet"
+            return result
+
+        except Exception as e:
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            await self._log_api_call(
+                endpoint="/v1/chat/completions",
+                method="POST",
+                status_code=None,
+                error_message=str(e),
+                duration_ms=duration_ms
+            )
+            return {
+                "success": False,
+                "message": f"Error analyzing document: {str(e)}"
+            }
+
     def _build_modular_prompt(
         self,
         extracted_text: str,
@@ -277,6 +398,7 @@ class OpenAIDocumentAnalyzer:
         current_title: str,
         available_correspondents: Optional[list] = None,
         available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
         available_tags: Optional[list] = None
     ) -> str:
         """Build modular prompt using individual field prompts"""
@@ -295,6 +417,11 @@ class OpenAIDocumentAnalyzer:
         else:
             doc_types_str = "None available"
 
+        if available_storage_paths:
+            storage_paths_str = ", ".join([sp["name"] for sp in available_storage_paths])
+        else:
+            storage_paths_str = "None available"
+
         if available_tags:
             tags_str = ", ".join([t["name"] for t in available_tags])
         else:
@@ -302,12 +429,13 @@ class OpenAIDocumentAnalyzer:
 
         # Determine which fields are active (have non-empty prompts) and replace placeholders
         active_fields = {}
-        for field in ["document_date", "correspondent", "document_type", "content_keywords", "suggested_title", "suggested_tag"]:
+        for field in ["document_date", "correspondent", "document_type", "storage_path", "content_keywords", "suggested_title", "suggested_tag"]:
             if field in prompts and prompts[field] and prompts[field].strip():
                 # Replace placeholders in the prompt text
                 field_prompt = prompts[field]
                 field_prompt = field_prompt.replace("{available_correspondents}", correspondents_str)
                 field_prompt = field_prompt.replace("{available_document_types}", doc_types_str)
+                field_prompt = field_prompt.replace("{available_storage_paths}", storage_paths_str)
                 field_prompt = field_prompt.replace("{available_tags}", tags_str)
                 field_prompt = field_prompt.replace("{filename}", filename)
                 field_prompt = field_prompt.replace("{current_title}", current_title or "Not set")
@@ -318,6 +446,7 @@ class OpenAIDocumentAnalyzer:
         if free_instructions:
             free_instructions = free_instructions.replace("{available_correspondents}", correspondents_str)
             free_instructions = free_instructions.replace("{available_document_types}", doc_types_str)
+            free_instructions = free_instructions.replace("{available_storage_paths}", storage_paths_str)
             free_instructions = free_instructions.replace("{available_tags}", tags_str)
             free_instructions = free_instructions.replace("{filename}", filename)
             free_instructions = free_instructions.replace("{current_title}", current_title or "Not set")
@@ -336,6 +465,10 @@ class OpenAIDocumentAnalyzer:
         if "document_type" in active_fields and available_document_types:
             doc_types_list = ", ".join([dt["name"] for dt in available_document_types])
             available_options.append(f"- Document Types: {doc_types_list}")
+
+        if "storage_path" in active_fields and available_storage_paths:
+            storage_paths_list = ", ".join([sp["name"] for sp in available_storage_paths])
+            available_options.append(f"- Storage Paths: {storage_paths_list}")
 
         if "suggested_tag" in active_fields and available_tags:
             tags_list = ", ".join([t["name"] for t in available_tags])
@@ -367,6 +500,9 @@ class OpenAIDocumentAnalyzer:
             if "document_type" in active_fields:
                 sections.append(f"\n**Document Type:**\n{active_fields['document_type']}")
 
+            if "storage_path" in active_fields:
+                sections.append(f"\n**Storage Path:**\n{active_fields['storage_path']}")
+
             if "content_keywords" in active_fields:
                 sections.append(f"\n**Content Keywords:**\n{active_fields['content_keywords']}")
 
@@ -388,6 +524,8 @@ class OpenAIDocumentAnalyzer:
             json_fields.append('  "correspondent": "string"')
         if "document_type" in active_fields:
             json_fields.append('  "document_type": "string"')
+        if "storage_path" in active_fields:
+            json_fields.append('  "storage_path": "string"')
         if "content_keywords" in active_fields:
             json_fields.append('  "content_keywords": "string"')
         if "suggested_title" in active_fields:
@@ -412,6 +550,7 @@ class OpenAIDocumentAnalyzer:
         filename: str,
         available_correspondents: Optional[list] = None,
         available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
         available_tags: Optional[list] = None
     ) -> str:
         """Build prompt for OpenAI analysis using template with placeholders"""
@@ -424,6 +563,7 @@ class OpenAIDocumentAnalyzer:
                 current_title=current_title,
                 available_correspondents=available_correspondents,
                 available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
                 available_tags=available_tags
             )
 
@@ -554,6 +694,7 @@ TAGS: [tag1, tag2, tag3, ...]
                 "title": result.get("suggested_title", ""),
                 "document_type": result.get("document_type", ""),
                 "document_date": result.get("document_date", ""),
+                "storage_path": result.get("storage_path", ""),
                 "keywords": result.get("content_keywords", ""),
                 "suggested_tags": tags,
                 "correspondent": result.get("correspondent", "")
@@ -649,6 +790,7 @@ TAGS: [tag1, tag2, tag3, ...]
         current_title: str,
         available_correspondents: Optional[list] = None,
         available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
         available_tags: Optional[list] = None
     ) -> Dict[str, Any]:
         """
@@ -661,6 +803,7 @@ TAGS: [tag1, tag2, tag3, ...]
             current_title: Current title from Paperless
             available_correspondents: List of available correspondents
             available_document_types: List of available document types
+            available_storage_paths: List of available storage paths
             available_tags: List of available tags
 
         Returns:
@@ -685,6 +828,7 @@ TAGS: [tag1, tag2, tag3, ...]
                 current_title=current_title,
                 available_correspondents=available_correspondents,
                 available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
                 available_tags=available_tags
             )
 
@@ -885,6 +1029,7 @@ TAGS: [tag1, tag2, tag3, ...]
         current_title: str,
         available_correspondents: Optional[list] = None,
         available_document_types: Optional[list] = None,
+        available_storage_paths: Optional[list] = None,
         available_tags: Optional[list] = None
     ) -> str:
         """Build prompt for Vision API analysis - uses modular prompts if configured"""
@@ -899,6 +1044,7 @@ TAGS: [tag1, tag2, tag3, ...]
                 current_title=current_title,
                 available_correspondents=available_correspondents,
                 available_document_types=available_document_types,
+                available_storage_paths=available_storage_paths,
                 available_tags=available_tags
             )
 

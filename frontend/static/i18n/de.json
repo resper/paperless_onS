@@ -35,6 +35,10 @@
     "available_tags": {
       "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Tags",
       "example": "dringend, finanzen, rechtlich, persönlich, geschäftlich, steuer-2024"
+    },
+    "available_storage_paths": {
+      "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Speicherpfade",
+      "example": "Archiv 2024, Wichtige Dokumente, Steuern, Verträge, Persönlich"
     }
   },
   "settings": {
@@ -80,12 +84,15 @@
     "filters": "Filter",
     "filter_by_correspondent": "Nach Absender filtern",
     "filter_by_document_type": "Nach Dokumententyp filtern",
+    "filter_by_storage_path": "Nach Speicherpfad filtern",
     "filter_by_date": "Nach Datum filtern",
     "select_correspondent": "Absender auswählen...",
     "select_document_type": "Dokumententyp auswählen...",
+    "select_storage_path": "Speicherpfad auswählen...",
     "all_tags": "Alle Tags",
     "all_correspondents": "Alle Absender",
     "all_document_types": "Alle Dokumententypen",
+    "all_storage_paths": "Alle Speicherpfade",
     "date_from": "Von Datum",
     "date_to": "Bis Datum",
     "clear_filters": "Filter zurücksetzen",
@@ -127,6 +134,7 @@
     "document_date": "Erkanntes Datum",
     "correspondent": "Erkannter Korrespondent",
     "document_type": "Erkannter Dokumententyp",
+    "storage_path": "Erkannter Speicherpfad",
     "content_keywords": "Inhalts-Schlüsselwörter",
     "keywords_hint": "(Beschreibt, worum es im Dokument geht, nicht den Typ)",
     "suggested_tags": "Vorgeschlagene Tags",
@@ -173,6 +181,7 @@
     "field_document_date": "Dokumentendatum",
     "field_correspondent": "Korrespondent",
     "field_document_type": "Dokumententyp",
+    "field_storage_path": "Speicherpfad",
     "field_content_keywords": "Inhalts-Schlüsselwörter",
     "field_suggested_title": "Vorgeschlagener Titel",
     "field_suggested_tag": "Vorgeschlagener Tag",
@@ -220,34 +229,34 @@
     "metadata_update": "Metadaten-Aktualisierungseinstellungen",
     "auto_update": "Dokumentenmetadaten automatisch aktualisieren",
     "auto_update_help": "Wendet automatisch die von der KI vorgeschlagenen Metadaten auf Dokumente an, ohne manuelle Überprüfung",
+    "text_source": "Textquelle für automatische Verarbeitung",
+    "text_source_paperless": "Text von Paperless-NGX nutzen",
+    "text_source_smart": "Text aus PDF extrahieren, bei Bild Vision API nutzen",
+    "text_source_vision": "PDF grundsätzlich an Vision API übergeben",
+    "text_source_help": "Wählen Sie, wie der Text für die KI-Analyse gewonnen werden soll.",
     "save": "Einstellungen für automatische Verarbeitung speichern"
   },
   "processing_settings": {
     "title": "Dokumentenverarbeitung",
-    "text_source": "Textquelle für KI-Analyse",
-    "text_source_paperless": "Von Paperless-NGX extrahierten Text verwenden (OCR)",
-    "text_source_ai": "Dokumentdatei an KI senden für Texterkennung (Vision API)",
-    "text_source_help": "Wählen Sie, ob der von Paperless erkannte Text verwendet werden soll oder ob die KI den Text aus dem Dokumentbild extrahieren soll.",
     "display_text_length": "Textvorschau-Limit",
     "display_text_length_help": "Maximale Anzahl der Zeichen für die Textvorschau im Analysedialog (500 - 20.000)",
-    "auto_processing_tags": "Tag für Automatische Verarbeitung",
-    "auto_processing_tags_help": "Wählen Sie den Tag aus, der für die automatische Verarbeitung verwendet werden soll.",
-    "no_tag": "Kein Tag",
-    "enable_auto_processing": "Automatische Verarbeitung aktivieren",
-    "enable_auto_processing_help": "Wenn aktiviert, werden Dokumente mit den ausgewählten Tags automatisch verarbeitet.",
-    "refresh_tags": "🔄 Tags aktualisieren",
-    "remove_tags": "Tags nach Verarbeitung entfernen",
-    "remove_filter_tag": "Filter-Tag nach erfolgreicher Verarbeitung vom Dokument entfernen",
-    "add_tag_after": "Tag nach Verarbeitung hinzufügen",
-    "enable_add_tag": "Nach erfolgreicher Verarbeitung einen Tag hinzufügen",
-    "select_tag": "Tag zum Hinzufügen auswählen...",
-    "add_tag_help": "Dieser Tag wird den Dokumenten nach erfolgreicher Verarbeitung hinzugefügt.",
     "save": "Verarbeitungseinstellungen speichern",
     "saved_success": "Verarbeitungseinstellungen erfolgreich gespeichert!",
-    "no_tags_configured": "Keine Filter-Tags konfiguriert. Bitte gehen Sie zu Einstellungen > Dokumentenverarbeitung, um Tags auszuwählen.",
     "auto_update_title": "Automatische Aktualisierung",
     "auto_update": "Metadaten automatisch aktualisieren (ohne Bestätigung)",
     "auto_update_help": "Wenn aktiviert, werden Metadaten direkt ohne Bestätigungsdialog übernommen."
+  },
+  "text_source": {
+    "modal_title": "Textquelle auswählen",
+    "modal_subtitle": "Wie soll der Text für die KI-Analyse gewonnen werden?",
+    "option_paperless": "Text von Paperless-NGX nutzen",
+    "option_paperless_help": "Verwendet den bereits von Paperless-NGX extrahierten Text (OCR). Schnell und günstig.",
+    "option_smart": "Text aus PDF extrahieren, bei Bild Vision API nutzen",
+    "option_smart_help": "Versucht zuerst Text aus PDF zu extrahieren. Falls nicht möglich oder ein Bild, wird Vision API verwendet. Intelligente Wahl.",
+    "option_vision": "PDF grundsätzlich an Vision API übergeben",
+    "option_vision_help": "Sendet Dokument immer als Bild an Vision API für OCR. Beste Qualität, höhere Kosten.",
+    "continue": "Weiter mit Analyse",
+    "cancel": "Abbrechen"
   },
   "history": {
     "title": "Verlauf",
@@ -291,6 +300,8 @@
     "close": "Schließen",
     "test": "Testen",
     "none": "Keine",
-    "not_available": "Nicht verfügbar"
+    "not_available": "Nicht verfügbar",
+    "new": "Neu",
+    "hold_ctrl": "Halten Sie Strg/Cmd gedrückt, um mehrere auszuwählen"
   }
 }

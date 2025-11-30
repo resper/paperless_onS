@@ -250,6 +250,56 @@ class PaperlessClient:
                 "message": f"Error getting document types: {str(e)}"
             }
 
+    async def get_storage_paths(self) -> Dict[str, Any]:
+        """
+        Get all available storage paths from Paperless-NGX
+
+        Returns:
+            Dict with storage paths list or error
+        """
+        start_time = datetime.now()
+        try:
+            storage_paths = []
+            async with self._get_client() as client:
+                # Use client.storage_paths helper directly - it's an async iterator
+                async for path in client.storage_paths:
+                    storage_paths.append({
+                        "id": path.id,
+                        "name": path.name,
+                        "path": getattr(path, 'path', ''),
+                        "document_count": getattr(path, 'document_count', 0)
+                    })
+
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+
+            await self._log_api_call(
+                endpoint="/api/storage_paths/",
+                method="GET",
+                status_code=200,
+                response_data={"count": len(storage_paths)},
+                duration_ms=duration_ms
+            )
+
+            return {
+                "success": True,
+                "storage_paths": storage_paths,
+                "count": len(storage_paths)
+            }
+
+        except Exception as e:
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            await self._log_api_call(
+                endpoint="/api/storage_paths/",
+                method="GET",
+                status_code=None,
+                error_message=str(e),
+                duration_ms=duration_ms
+            )
+            return {
+                "success": False,
+                "message": f"Error getting storage paths: {str(e)}"
+            }
+
     async def search_documents(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Search for documents with optional filter parameters
@@ -266,36 +316,57 @@ class PaperlessClient:
 
         try:
             documents = []
+            # First, get all tags to build a mapping
+            tag_mapping = {}
             async with self._get_client() as client:
+                async for tag in client.tags:
+                    tag_mapping[tag.id] = tag.name
+
                 if filter_params:
                     # Use reduce context to filter documents
                     async with client.documents.reduce(**filter_params) as filtered:
                         async for doc in filtered:
+                            # Get tag names from tag IDs
+                            tag_ids = doc.tags if hasattr(doc, 'tags') else []
+                            tag_names = [tag_mapping.get(tag_id, f"Tag {tag_id}") for tag_id in tag_ids]
+
                             documents.append({
                                 "id": doc.id,
                                 "title": doc.title,
                                 "content": getattr(doc, 'content', ''),
                                 "created": doc.created.isoformat() if hasattr(doc, 'created') and doc.created else None,
                                 "modified": doc.modified.isoformat() if hasattr(doc, 'modified') and doc.modified else None,
-                                "tags": doc.tags if hasattr(doc, 'tags') else [],
+                                "tags": tag_ids,
+                                "tag_names": tag_names,
                                 "correspondent": doc.correspondent if hasattr(doc, 'correspondent') else None,
                                 "correspondent_name": getattr(doc, 'correspondent_name', None),
                                 "document_type": doc.document_type if hasattr(doc, 'document_type') else None,
+                                "document_type_name": getattr(doc, 'document_type_name', None),
+                                "storage_path": doc.storage_path if hasattr(doc, 'storage_path') else None,
+                                "storage_path_name": getattr(doc, 'storage_path_name', None),
                                 "archive_serial_number": getattr(doc, 'archive_serial_number', None)
                             })
                 else:
                     # No filters - get all documents
                     async for doc in client.documents:
+                        # Get tag names from tag IDs
+                        tag_ids = doc.tags if hasattr(doc, 'tags') else []
+                        tag_names = [tag_mapping.get(tag_id, f"Tag {tag_id}") for tag_id in tag_ids]
+
                         documents.append({
                             "id": doc.id,
                             "title": doc.title,
                             "content": getattr(doc, 'content', ''),
                             "created": doc.created.isoformat() if hasattr(doc, 'created') and doc.created else None,
                             "modified": doc.modified.isoformat() if hasattr(doc, 'modified') and doc.modified else None,
-                            "tags": doc.tags if hasattr(doc, 'tags') else [],
+                            "tags": tag_ids,
+                            "tag_names": tag_names,
                             "correspondent": doc.correspondent if hasattr(doc, 'correspondent') else None,
                             "correspondent_name": getattr(doc, 'correspondent_name', None),
                             "document_type": doc.document_type if hasattr(doc, 'document_type') else None,
+                            "document_type_name": getattr(doc, 'document_type_name', None),
+                            "storage_path": doc.storage_path if hasattr(doc, 'storage_path') else None,
+                            "storage_path_name": getattr(doc, 'storage_path_name', None),
                             "archive_serial_number": getattr(doc, 'archive_serial_number', None)
                         })
 
@@ -344,20 +415,32 @@ class PaperlessClient:
         start_time = datetime.now()
         try:
             documents = []
+            # First, get all tags to build a mapping
+            tag_mapping = {}
             async with self._get_client() as client:
+                async for tag in client.tags:
+                    tag_mapping[tag.id] = tag.name
+
                 # Use reduce context to filter documents
                 async with client.documents.reduce(**{"tags__id__in": str(tag_id)}) as filtered:
                     async for doc in filtered:
+                        # Get tag names from tag IDs
+                        tag_ids = doc.tags if hasattr(doc, 'tags') else []
+                        tag_names = [tag_mapping.get(tag_id, f"Tag {tag_id}") for tag_id in tag_ids]
+
                         documents.append({
                             "id": doc.id,
                             "title": doc.title,
                             "content": getattr(doc, 'content', ''),
                             "created": doc.created.isoformat() if hasattr(doc, 'created') and doc.created else None,
                             "modified": doc.modified.isoformat() if hasattr(doc, 'modified') and doc.modified else None,
-                            "tags": doc.tags if hasattr(doc, 'tags') else [],
+                            "tags": tag_ids,
+                            "tag_names": tag_names,
                             "correspondent": doc.correspondent if hasattr(doc, 'correspondent') else None,
                             "correspondent_name": getattr(doc, 'correspondent_name', None),
                             "document_type": doc.document_type if hasattr(doc, 'document_type') else None,
+                            "storage_path": doc.storage_path if hasattr(doc, 'storage_path') else None,
+                            "storage_path_name": getattr(doc, 'storage_path_name', None),
                             "archive_serial_number": getattr(doc, 'archive_serial_number', None)
                         })
 
@@ -419,6 +502,7 @@ class PaperlessClient:
                     "tags": doc.tags if hasattr(doc, 'tags') else [],
                     "correspondent": doc.correspondent if hasattr(doc, 'correspondent') else None,
                     "document_type": doc.document_type if hasattr(doc, 'document_type') else None,
+                    "storage_path": doc.storage_path if hasattr(doc, 'storage_path') else None,
                     "archive_serial_number": getattr(doc, 'archive_serial_number', None),
                     "original_file_name": getattr(doc, 'original_file_name', None),
                     "archived_file_name": getattr(doc, 'archived_file_name', None)
@@ -513,6 +597,7 @@ class PaperlessClient:
         tags: Optional[List[int]] = None,
         correspondent: Optional[int] = None,
         document_type: Optional[int] = None,
+        storage_path: Optional[int] = None,
         created: Optional[str] = None,
         custom_fields: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
@@ -526,6 +611,7 @@ class PaperlessClient:
             tags: List of tag IDs
             correspondent: Correspondent ID
             document_type: Document type ID
+            storage_path: Storage path ID
             created: Document creation date (YYYY-MM-DD format)
             custom_fields: List of custom field updates
 
@@ -546,6 +632,8 @@ class PaperlessClient:
             update_data["correspondent"] = correspondent
         if document_type is not None:
             update_data["document_type"] = document_type
+        if storage_path is not None:
+            update_data["storage_path"] = storage_path
         if created is not None:
             update_data["created"] = created
         if custom_fields is not None:
@@ -567,6 +655,8 @@ class PaperlessClient:
                     doc.correspondent = update_data["correspondent"]
                 if "document_type" in update_data:
                     doc.document_type = update_data["document_type"]
+                if "storage_path" in update_data:
+                    doc.storage_path = update_data["storage_path"]
                 if "created" in update_data:
                     doc.created = update_data["created"]
                 if "custom_fields" in update_data:

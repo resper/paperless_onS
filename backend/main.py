@@ -9,7 +9,7 @@ from pathlib import Path
 
 from backend.config.settings import settings
 from backend.database.database import init_database
-from backend.api import documents, settings_api, tags, prompts, correspondents, document_types
+from backend.api import documents, settings_api, tags, prompts, correspondents, document_types, storage_paths
 
 # Create FastAPI app
 app = FastAPI(
@@ -34,6 +34,7 @@ app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
 app.include_router(prompts.router, prefix="/api/prompts", tags=["prompts"])
 app.include_router(correspondents.router, prefix="/api/correspondents", tags=["correspondents"])
 app.include_router(document_types.router, prefix="/api/document-types", tags=["document-types"])
+app.include_router(storage_paths.router, prefix="/api/storage-paths", tags=["storage-paths"])
 
 # Mount static files
 static_path = Path(__file__).parent.parent / "frontend" / "static"

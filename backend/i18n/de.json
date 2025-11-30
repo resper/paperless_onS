@@ -35,6 +35,10 @@
     "available_tags": {
       "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Tags",
       "example": "dringend, finanzen, rechtlich, persönlich, geschäftlich, steuer-2024"
+    },
+    "available_storage_paths": {
+      "description": "Kommagetrennte Liste der in Paperless-NGX gespeicherten Speicherpfade",
+      "example": "Archiv 2024, Wichtige Dokumente, Steuern, Verträge, Persönlich"
     }
   },
   "settings": {

@@ -35,6 +35,10 @@
     "available_tags": {
       "description": "Comma-separated list of tags already stored in Paperless-NGX",
       "example": "urgent, finance, legal, personal, business, tax-2024"
+    },
+    "available_storage_paths": {
+      "description": "Comma-separated list of storage paths already stored in Paperless-NGX",
+      "example": "Archive 2024, Important Documents, Taxes, Contracts, Personal"
     }
   },
   "settings": {
@@ -80,12 +84,15 @@
     "filters": "Filters",
     "filter_by_correspondent": "Filter by Correspondent",
     "filter_by_document_type": "Filter by Document Type",
+    "filter_by_storage_path": "Filter by Storage Path",
     "filter_by_date": "Filter by Date",
     "select_correspondent": "Select correspondent...",
     "select_document_type": "Select document type...",
+    "select_storage_path": "Select storage path...",
     "all_tags": "All Tags",
     "all_correspondents": "All Correspondents",
     "all_document_types": "All Document Types",
+    "all_storage_paths": "All Storage Paths",
     "date_from": "From Date",
     "date_to": "To Date",
     "clear_filters": "Clear Filters",
@@ -127,6 +134,7 @@
     "document_date": "Detected Date",
     "correspondent": "Detected Correspondent",
     "document_type": "Detected Document Type",
+    "storage_path": "Detected Storage Path",
     "content_keywords": "Content Keywords",
     "keywords_hint": "(Describes what the document is about, not the type)",
     "suggested_tags": "Suggested Tags",
@@ -173,6 +181,7 @@
     "field_document_date": "Document Date",
     "field_correspondent": "Correspondent",
     "field_document_type": "Document Type",
+    "field_storage_path": "Storage Path",
     "field_content_keywords": "Content Keywords",
     "field_suggested_title": "Suggested Title",
     "field_suggested_tag": "Suggested Tag",
@@ -220,34 +229,34 @@
     "metadata_update": "Metadata Update Settings",
     "auto_update": "Automatically update document metadata",
     "auto_update_help": "Automatically apply AI-suggested metadata to documents without manual review",
+    "text_source": "Text Source for Automatic Processing",
+    "text_source_paperless": "Use text from Paperless-NGX",
+    "text_source_smart": "Extract text from PDF, use Vision API for images",
+    "text_source_vision": "Always send PDF to Vision API",
+    "text_source_help": "Choose how text should be extracted for AI analysis.",
     "save": "Save Automatic Processing Settings"
   },
   "processing_settings": {
     "title": "Document Processing",
-    "text_source": "Text Source for AI Analysis",
-    "text_source_paperless": "Use text extracted by Paperless-NGX (OCR)",
-    "text_source_ai": "Send document file to AI for text recognition (Vision API)",
-    "text_source_help": "Choose whether to use Paperless OCR text or let the AI extract text from the document image.",
     "display_text_length": "Text Preview Limit",
     "display_text_length_help": "Maximum number of characters for text preview in analysis dialog (500 - 20,000)",
-    "auto_processing_tags": "Tag for Automatic Processing",
-    "auto_processing_tags_help": "Select which tag to use for automatic processing.",
-    "no_tag": "No Tag",
-    "enable_auto_processing": "Enable Automatic Processing",
-    "enable_auto_processing_help": "If enabled, documents with the selected tags will be automatically processed.",
-    "refresh_tags": "🔄 Refresh Tags",
-    "remove_tags": "Remove Tags After Processing",
-    "remove_filter_tag": "Remove the filter tag from document after successful processing",
-    "add_tag_after": "Add Tag After Processing",
-    "enable_add_tag": "Add a tag after successful processing",
-    "select_tag": "Select a tag to add...",
-    "add_tag_help": "This tag will be added to documents after they are successfully processed.",
     "save": "Save Processing Settings",
     "saved_success": "Processing settings saved successfully!",
-    "no_tags_configured": "No filter tags configured. Please go to Settings > Document Processing to select tags.",
     "auto_update_title": "Automatic Updates",
     "auto_update": "Automatically update metadata (no confirmation)",
     "auto_update_help": "If enabled, metadata will be applied directly without confirmation dialog."
+  },
+  "text_source": {
+    "modal_title": "Select Text Source",
+    "modal_subtitle": "How should the text be extracted for AI analysis?",
+    "option_paperless": "Use text from Paperless-NGX",
+    "option_paperless_help": "Uses text already extracted by Paperless-NGX (OCR). Fast and cost-effective.",
+    "option_smart": "Extract text from PDF, use Vision API for images",
+    "option_smart_help": "Tries to extract text from PDF first. If not possible or an image, uses Vision API. Smart choice.",
+    "option_vision": "Always send PDF to Vision API",
+    "option_vision_help": "Always sends document as image to Vision API for OCR. Best quality, higher cost.",
+    "continue": "Continue with Analysis",
+    "cancel": "Cancel"
   },
   "history": {
     "title": "History",
@@ -291,6 +300,8 @@
     "close": "Close",
     "test": "Test",
     "none": "None",
-    "not_available": "N/A"
+    "not_available": "N/A",
+    "new": "New",
+    "hold_ctrl": "Hold Ctrl/Cmd to select multiple"
   }
 }

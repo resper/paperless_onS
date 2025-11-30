@@ -35,6 +35,10 @@
     "available_tags": {
       "description": "Comma-separated list of tags already stored in Paperless-NGX",
       "example": "urgent, finance, legal, personal, business, tax-2024"
+    },
+    "available_storage_paths": {
+      "description": "Comma-separated list of storage paths already stored in Paperless-NGX",
+      "example": "Archive 2024, Important Documents, Taxes, Contracts, Personal"
     }
   },
   "settings": {

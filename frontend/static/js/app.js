@@ -1,6 +1,5 @@
 // Paperless-onS Frontend Application
 // Updated: 2025-11-22 23:30 - Database storage for text_source_mode
-console.log('🔄 Paperless-onS loaded - Version 2025-11-22 23:30 - Database text_source_mode support ACTIVE');
 
 const API_BASE = '';
 
@@ -12,6 +11,14 @@ let documentLimit = 50;
 
 // Global Paperless URL (loaded on startup)
 let paperlessUrl = '';
+
+// Global state for pending text source selection
+let pendingDocumentId = null;
+let pendingBulkConfig = null;
+
+// Global state for aborting processing
+let currentAbortController = null;
+let bulkProcessingAborted = false;
 
 // Tab Management
 function showTab(tabName) {
@@ -175,6 +182,7 @@ async function startBulkProcessing() {
     document.getElementById('bulkUpdateDate').checked = true;
     document.getElementById('bulkUpdateCorrespondent').checked = true;
     document.getElementById('bulkUpdateDocumentType').checked = true;
+    document.getElementById('bulkUpdateStoragePath').checked = true;
     document.getElementById('bulkUpdateKeywords').checked = true;
     document.getElementById('bulkUpdateTags').checked = true;
     document.getElementById('bulkClearExistingTags').checked = false;
@@ -182,11 +190,14 @@ async function startBulkProcessing() {
     document.getElementById('bulkProcessingTagSelect').disabled = true;
 
     // Show configuration modal
-    const configModal = new bootstrap.Modal(document.getElementById('bulkProcessingConfigModal'));
+    const configModal = new bootstrap.Modal(document.getElementById('bulkProcessingConfigModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
     configModal.show();
 }
 
-// Confirm and start bulk processing after configuration
+// Confirm and start bulk processing after configuration - Show text source modal first
 async function confirmBulkProcessing() {
     const documentIds = window.bulkProcessingDocumentIds;
 
@@ -201,6 +212,7 @@ async function confirmBulkProcessing() {
         document_date: document.getElementById('bulkUpdateDate').checked,
         correspondent: document.getElementById('bulkUpdateCorrespondent').checked,
         document_type: document.getElementById('bulkUpdateDocumentType').checked,
+        storage_path: document.getElementById('bulkUpdateStoragePath').checked,
         keywords: document.getElementById('bulkUpdateKeywords').checked,
         tags: document.getElementById('bulkUpdateTags').checked
     };
@@ -216,25 +228,53 @@ async function confirmBulkProcessing() {
         return;
     }
 
+    // Save bulk configuration to global variable
+    pendingBulkConfig = {
+        documentIds,
+        selectedFields,
+        clearExistingTags,
+        addProcessingTag,
+        processingTagId
+    };
+
     // Close configuration modal
     bootstrap.Modal.getInstance(document.getElementById('bulkProcessingConfigModal')).hide();
 
-    // Load text_source_mode from database
-    let textSourceMode = 'paperless';  // default
-    try {
-        const settingResponse = await fetch(`${API_BASE}/api/settings/text_source_mode`);
-        const settingData = await settingResponse.json();
-        if (settingData && settingData.value) {
-            textSourceMode = settingData.value;
-        }
-    } catch (error) {
-        console.error('Error loading text_source_mode, using default:', error);
-    }
+    // Reset text source selection to default (paperless)
+    document.getElementById('textSourceOptionPaperless').checked = true;
+
+    // Show text source selection modal
+    const textSourceModal = new bootstrap.Modal(document.getElementById('textSourceModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    textSourceModal.show();
+}
+
+// Process bulk documents with selected text source
+async function processBulkDocuments(textSourceMode, bulkConfig) {
+    const { documentIds, selectedFields, clearExistingTags, addProcessingTag, processingTagId } = bulkConfig;
+
+    // Reset abort flag
+    bulkProcessingAborted = false;
 
     // Show progress modal
-    const modal = new bootstrap.Modal(document.getElementById('processingModal'));
+    const modal = new bootstrap.Modal(document.getElementById('processingModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
     const modalBody = document.getElementById('processingModalBody');
     const modalFooter = document.getElementById('processingModalFooter');
+
+    // Add event listener for modal close to abort processing
+    const processingModalElement = document.getElementById('processingModal');
+    const handleModalHide = () => {
+        bulkProcessingAborted = true;
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+    };
+    processingModalElement.addEventListener('hidden.bs.modal', handleModalHide, { once: true });
 
     modal.show();
 
@@ -259,7 +299,15 @@ async function confirmBulkProcessing() {
 
     // Process documents sequentially
     for (const documentId of documentIds) {
+        // Check if processing was aborted
+        if (bulkProcessingAborted) {
+            break;
+        }
+
         try {
+            // Create AbortController for this request
+            currentAbortController = new AbortController();
+
             // Process document with OpenAI
             const response = await fetch(`${API_BASE}/api/documents/process`, {
                 method: 'POST',
@@ -268,7 +316,8 @@ async function confirmBulkProcessing() {
                     document_id: documentId,
                     auto_update: false,  // We'll manually apply metadata with selected fields
                     text_source_mode: textSourceMode
-                })
+                }),
+                signal: currentAbortController.signal
             });
 
             const data = await response.json();
@@ -292,6 +341,10 @@ async function confirmBulkProcessing() {
 
                 if (selectedFields.document_type && metadata.document_type) {
                     selectedMetadata.document_type = metadata.document_type;
+                }
+
+                if (selectedFields.storage_path && metadata.storage_path) {
+                    selectedMetadata.storage_path = metadata.storage_path;
                 }
 
                 if (selectedFields.keywords && metadata.keywords) {
@@ -334,8 +387,15 @@ async function confirmBulkProcessing() {
                 failed++;
             }
         } catch (error) {
-            console.error(`Error processing document ${documentId}:`, error);
-            failed++;
+            // Check if the error is due to abort
+            if (error.name === 'AbortError') {
+                console.log(`Processing aborted for document ${documentId}`);
+                // Don't count as failed, just break the loop
+                break;
+            } else {
+                console.error(`Error processing document ${documentId}:`, error);
+                failed++;
+            }
         }
 
         processed++;
@@ -349,10 +409,14 @@ async function confirmBulkProcessing() {
     }
 
     // Show completion message
+    const wasAborted = bulkProcessingAborted && processed < documentIds.length;
+    const alertType = wasAborted ? 'warning' : (failed === 0 ? 'success' : 'warning');
+
     modalBody.innerHTML = `
-        <div class="alert alert-${failed === 0 ? 'success' : 'warning'}">
+        <div class="alert alert-${alertType}">
             <h6 data-i18n="documents.bulk_processing_complete">Bulk Processing Complete</h6>
-            <p><span data-i18n="documents.total_processed">Total processed</span>: ${processed}</p>
+            ${wasAborted ? '<p class="text-warning"><strong>⚠️ Processing was aborted by user</strong></p>' : ''}
+            <p><span data-i18n="documents.total_processed">Total processed</span>: ${processed} / ${documentIds.length}</p>
             <p><span data-i18n="documents.succeeded">Succeeded</span>: ${succeeded}</p>
             <p><span data-i18n="documents.failed">Failed</span>: ${failed}</p>
         </div>
@@ -516,6 +580,22 @@ async function loadDocumentFilters() {
                 filterDocTypeSelect.appendChild(option);
             });
         }
+
+        // Load storage paths
+        const storagePathsResponse = await fetch(`${API_BASE}/api/storage-paths/all`);
+        const storagePathsData = await storagePathsResponse.json();
+
+        if (storagePathsData.success) {
+            const filterStoragePathSelect = document.getElementById('filterStoragePath');
+            filterStoragePathSelect.innerHTML = `<option value="">${t('documents.all_storage_paths')}</option>`;
+
+            storagePathsData.storage_paths.forEach(storagePath => {
+                const option = document.createElement('option');
+                option.value = storagePath.id;
+                option.textContent = storagePath.name;
+                filterStoragePathSelect.appendChild(option);
+            });
+        }
     } catch (error) {
         console.error('Error loading document filters:', error);
     }
@@ -531,6 +611,7 @@ async function applyDocumentFilters() {
     const selectedTags = Array.from(document.getElementById('filterDocumentTags').selectedOptions).map(opt => opt.value);
     const selectedCorrespondent = document.getElementById('filterCorrespondent').value;
     const selectedDocType = document.getElementById('filterDocumentType').value;
+    const selectedStoragePath = document.getElementById('filterStoragePath').value;
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
 
@@ -554,6 +635,10 @@ async function applyDocumentFilters() {
 
         if (selectedDocType) {
             params.append('document_type', selectedDocType);
+        }
+
+        if (selectedStoragePath) {
+            params.append('storage_path', selectedStoragePath);
         }
 
         if (dateFrom) {
@@ -602,6 +687,7 @@ function clearDocumentFilters() {
     document.getElementById('filterDocumentTags').selectedIndex = -1;
     document.getElementById('filterCorrespondent').value = '';
     document.getElementById('filterDocumentType').value = '';
+    document.getElementById('filterStoragePath').value = '';
     document.getElementById('filterDateFrom').value = '';
     document.getElementById('filterDateTo').value = '';
 
@@ -727,6 +813,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document_date: document.getElementById('promptDocumentDate').value,
                 correspondent: document.getElementById('promptCorrespondent').value,
                 document_type: document.getElementById('promptDocumentType').value,
+                storage_path: document.getElementById('promptStoragePath').value,
                 content_keywords: document.getElementById('promptContentKeywords').value,
                 suggested_title: document.getElementById('promptSuggestedTitle').value,
                 suggested_tag: document.getElementById('promptSuggestedTag').value,
@@ -793,6 +880,16 @@ function createDocumentCard(doc) {
     // Build Paperless document URL
     const paperlessDocUrl = paperlessUrl ? `${paperlessUrl}/documents/${doc.id}/details` : '#';
 
+    // Build tags display
+    let tagsHtml = '';
+    if (doc.tag_names && doc.tag_names.length > 0) {
+        tagsHtml = `
+            <div class="mt-2">
+                ${doc.tag_names.map(tagName => `<span class="badge bg-secondary me-1">${tagName}</span>`).join('')}
+            </div>
+        `;
+    }
+
     return `
         <div class="card document-card">
             <div class="card-body">
@@ -806,11 +903,14 @@ function createDocumentCard(doc) {
                                 ${doc.title || t('documents.untitled')}
                             </a>
                         </h6>
-                        <p class="card-text text-muted small">
+                        <p class="card-text text-muted small mb-1">
                             ${t('documents.id')}: ${doc.id} |
                             ${t('documents.created')}: ${new Date(doc.created).toLocaleDateString()}
                             ${doc.correspondent_name ? ' | ' + t('documents.from') + ': ' + doc.correspondent_name : ''}
+                            ${doc.document_type_name ? ' | ' + t('processing.document_type') + ': ' + doc.document_type_name : ''}
+                            ${doc.storage_path_name ? ' | ' + t('processing.storage_path') + ': ' + doc.storage_path_name : ''}
                         </p>
+                        ${tagsHtml}
                     </div>
                     <button class="btn btn-primary btn-sm btn-process" onclick="processDocument(${doc.id})">
                         ${t('documents.analyze')}
@@ -821,154 +921,281 @@ function createDocumentCard(doc) {
     `;
 }
 
-// Process Document
+// Process Document - Show text source modal first
 async function processDocument(documentId) {
-    const modal = new bootstrap.Modal(document.getElementById('processingModal'));
-    const modalBody = document.getElementById('processingModalBody');
-    const modalFooter = document.getElementById('processingModalFooter');
+    // Store document ID for later use
+    pendingDocumentId = documentId;
 
-    modal.show();
+    // Reset text source selection to default (paperless)
+    document.getElementById('textSourceOptionPaperless').checked = true;
 
-    modalBody.innerHTML = `
-        <div class="text-center">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">${t('common.loading')}</span>
-            </div>
-            <p class="mt-2">${t('processing.analyzing')}</p>
-        </div>
-    `;
+    // Show text source selection modal
+    const textSourceModal = new bootstrap.Modal(document.getElementById('textSourceModal'), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    textSourceModal.show();
+}
 
-    modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t('common.close')}</button>`;
+// Continue with document processing after text source selection
+async function continueWithTextSource() {
+    // Get selected text source
+    const selectedOption = document.querySelector('input[name="textSourceOption"]:checked');
+    const textSourceMode = selectedOption ? selectedOption.value : 'paperless';
 
-    try {
-        // Load text_source_mode from database
-        let textSourceMode = 'paperless';  // default
-        try {
-            const settingResponse = await fetch(`${API_BASE}/api/settings/text_source_mode`);
-            const settingData = await settingResponse.json();
-            if (settingData && settingData.value) {
-                textSourceMode = settingData.value;
-            }
-        } catch (error) {
-            console.error('Error loading text_source_mode, using default:', error);
-        }
+    // Close text source modal
+    bootstrap.Modal.getInstance(document.getElementById('textSourceModal')).hide();
 
-        const response = await fetch(`${API_BASE}/api/documents/process`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                document_id: documentId,
-                auto_update: false,
-                text_source_mode: textSourceMode
-            })
+    // Check if this is bulk processing or single document processing
+    if (pendingBulkConfig) {
+        // Bulk processing
+        await processBulkDocuments(textSourceMode, pendingBulkConfig);
+        pendingBulkConfig = null;
+    } else if (pendingDocumentId) {
+        // Single document processing
+        // Show processing modal
+        const modal = new bootstrap.Modal(document.getElementById('processingModal'), {
+            backdrop: 'static',
+            keyboard: false
         });
+        const modalBody = document.getElementById('processingModalBody');
+        const modalFooter = document.getElementById('processingModalFooter');
 
-        const data = await response.json();
+        modal.show();
 
-        if (data.success) {
-            displayProcessingResults(data);
-        } else {
-            modalBody.innerHTML = `
-                <div class="alert alert-danger">
-                    <strong>${t('common.error')}:</strong> ${data.message}
-                </div>
-            `;
-        }
-    } catch (error) {
         modalBody.innerHTML = `
-            <div class="alert alert-danger">
-                <strong>${t('common.error')}:</strong> ${error.message}
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">${t('common.loading')}</span>
+                </div>
+                <p class="mt-2">${t('processing.analyzing')}</p>
             </div>
         `;
+
+        modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t('common.close')}</button>`;
+
+        try {
+            const response = await fetch(`${API_BASE}/api/documents/process`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    document_id: pendingDocumentId,
+                    auto_update: false,
+                    text_source_mode: textSourceMode
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                displayProcessingResults(data);
+            } else {
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>${t('common.error')}:</strong> ${data.message}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>${t('common.error')}:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            // Clear pending document ID
+            pendingDocumentId = null;
+        }
     }
 }
 
 // Display Processing Results
-function displayProcessingResults(data) {
+async function displayProcessingResults(data) {
     const modalBody = document.getElementById('processingModalBody');
     const modalFooter = document.getElementById('processingModalFooter');
 
     const metadata = data.analysis.suggested_metadata;
     const currentTags = data.current_metadata.tags || [];
 
+    // Load available lists for dropdowns
+    let availableCorrespondents = [];
+    let availableDocumentTypes = [];
+    let availableStoragePaths = [];
+    let availableTags = [];
+
+    try {
+        const [correspsResp, docTypesResp, storagePathsResp, tagsResp] = await Promise.all([
+            fetch(`${API_BASE}/api/correspondents/all`),
+            fetch(`${API_BASE}/api/document-types/all`),
+            fetch(`${API_BASE}/api/storage-paths/all`),
+            fetch(`${API_BASE}/api/tags/all`)
+        ]);
+
+        const [correspsData, docTypesData, storagePathsData, tagsData] = await Promise.all([
+            correspsResp.json(),
+            docTypesResp.json(),
+            storagePathsResp.json(),
+            tagsResp.json()
+        ]);
+
+        if (correspsData.success) availableCorrespondents = correspsData.correspondents;
+        if (docTypesData.success) availableDocumentTypes = docTypesData.document_types;
+        if (storagePathsData.success) availableStoragePaths = storagePathsData.storage_paths;
+        if (tagsData.success) availableTags = tagsData.tags;
+    } catch (error) {
+        console.error('Error loading metadata lists:', error);
+    }
+
     // Build metadata selection form
     let metadataFields = '';
 
-    // Title
+    // Title - Editable text field
     if (metadata.title) {
         metadataFields += `
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="apply_title" checked>
                 <label class="form-check-label w-100" for="apply_title">
                     <strong>${t('processing.suggested_title')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">
-                        <code>${metadata.title}</code>
+                    <div class="ms-4 mt-1">
+                        <input type="text" class="form-control" id="edit_title" value="${metadata.title.replace(/"/g, '&quot;')}">
                     </div>
                 </label>
             </div>
         `;
     }
 
-    // Document Date
+    // Document Date - Editable date field
     if (metadata.document_date) {
         metadataFields += `
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="apply_document_date" checked>
                 <label class="form-check-label w-100" for="apply_document_date">
                     <strong>${t('processing.document_date')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">${metadata.document_date}</div>
+                    <div class="ms-4 mt-1">
+                        <input type="date" class="form-control" id="edit_document_date" value="${metadata.document_date}">
+                    </div>
                 </label>
             </div>
         `;
     }
 
-    // Correspondent
+    // Correspondent - Dropdown
     if (metadata.correspondent) {
+        let correspondentOptions = availableCorrespondents.map(c =>
+            `<option value="${c.name}" ${c.name === metadata.correspondent ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        // Add AI suggestion if not in list
+        const correspondentExists = availableCorrespondents.some(c => c.name === metadata.correspondent);
+        if (!correspondentExists) {
+            correspondentOptions = `<option value="${metadata.correspondent}" selected>${metadata.correspondent} (${t('common.new')})</option>` + correspondentOptions;
+        }
+
         metadataFields += `
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="apply_correspondent" checked>
                 <label class="form-check-label w-100" for="apply_correspondent">
                     <strong>${t('processing.correspondent')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">${metadata.correspondent}</div>
+                    <div class="ms-4 mt-1">
+                        <select class="form-select" id="edit_correspondent">
+                            ${correspondentOptions}
+                        </select>
+                    </div>
                 </label>
             </div>
         `;
     }
 
-    // Document Type
+    // Document Type - Dropdown
     if (metadata.document_type) {
+        let docTypeOptions = availableDocumentTypes.map(dt =>
+            `<option value="${dt.name}" ${dt.name === metadata.document_type ? 'selected' : ''}>${dt.name}</option>`
+        ).join('');
+
+        // Add AI suggestion if not in list
+        const docTypeExists = availableDocumentTypes.some(dt => dt.name === metadata.document_type);
+        if (!docTypeExists) {
+            docTypeOptions = `<option value="${metadata.document_type}" selected>${metadata.document_type} (${t('common.new')})</option>` + docTypeOptions;
+        }
+
         metadataFields += `
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="apply_document_type" checked>
                 <label class="form-check-label w-100" for="apply_document_type">
                     <strong>${t('processing.document_type')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">${metadata.document_type}</div>
+                    <div class="ms-4 mt-1">
+                        <select class="form-select" id="edit_document_type">
+                            ${docTypeOptions}
+                        </select>
+                    </div>
                 </label>
             </div>
         `;
     }
 
-    // Keywords
+    // Storage Path - Dropdown (only existing)
+    if (metadata.storage_path) {
+        let storagePathOptions = '<option value="">' + t('common.none') + '</option>';
+        storagePathOptions += availableStoragePaths.map(sp =>
+            `<option value="${sp.name}" ${sp.name === metadata.storage_path ? 'selected' : ''}>${sp.name}</option>`
+        ).join('');
+
+        metadataFields += `
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="apply_storage_path" checked>
+                <label class="form-check-label w-100" for="apply_storage_path">
+                    <strong>${t('processing.storage_path')}:</strong>
+                    <div class="ms-4 mt-1">
+                        <select class="form-select" id="edit_storage_path">
+                            ${storagePathOptions}
+                        </select>
+                    </div>
+                </label>
+            </div>
+        `;
+    }
+
+    // Keywords - Editable text field
     if (metadata.keywords) {
         metadataFields += `
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="apply_keywords" checked>
                 <label class="form-check-label w-100" for="apply_keywords">
                     <strong>${t('processing.content_keywords')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">${metadata.keywords}</div>
+                    <div class="ms-4 mt-1">
+                        <input type="text" class="form-control" id="edit_keywords" value="${metadata.keywords.replace(/"/g, '&quot;')}">
+                    </div>
                 </label>
             </div>
         `;
     }
 
-    // Tags
+    // Tags - Multi-Select
     if (metadata.suggested_tags && metadata.suggested_tags.length > 0) {
+        let tagOptions = availableTags.map(tag => {
+            const isSelected = metadata.suggested_tags.includes(tag.name);
+            return `<option value="${tag.name}" ${isSelected ? 'selected' : ''}>${tag.name}</option>`;
+        }).join('');
+
+        // Add AI-suggested tags that don't exist yet
+        metadata.suggested_tags.forEach(suggestedTag => {
+            const tagExists = availableTags.some(t => t.name === suggestedTag);
+            if (!tagExists) {
+                tagOptions = `<option value="${suggestedTag}" selected>${suggestedTag} (${t('common.new')})</option>` + tagOptions;
+            }
+        });
+
         metadataFields += `
             <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" id="apply_tags" checked>
                 <label class="form-check-label w-100" for="apply_tags">
                     <strong>${t('processing.suggested_tags')}:</strong>
-                    <div class="ms-4 mt-1 p-2 bg-light rounded">${metadata.suggested_tags.join(', ')}</div>
+                    <div class="ms-4 mt-1">
+                        <select class="form-select" id="edit_tags" multiple size="5">
+                            ${tagOptions}
+                        </select>
+                        <div class="form-text small">${t('common.hold_ctrl')}</div>
+                    </div>
                 </label>
             </div>
             <div class="form-check ms-5 mb-3">
@@ -981,12 +1208,59 @@ function displayProcessingResults(data) {
         `;
     }
 
+    // Build extracted text section if available (Vision API)
+    let extractedTextSection = '';
+    if (data.analysis.extracted_text && data.analysis.text_source === 'vision_api') {
+        const truncatedText = data.analysis.extracted_text.length > 1000
+            ? data.analysis.extracted_text.substring(0, 1000) + '...'
+            : data.analysis.extracted_text;
+
+        extractedTextSection = `
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#extractedTextCollapse"
+                                aria-expanded="false" aria-controls="extractedTextCollapse">
+                            <i class="bi bi-eye"></i> Vision API - Extracted Text (OCR)
+                            <small class="text-muted">(${data.analysis.extracted_text.length} characters)</small>
+                        </button>
+                    </h6>
+                </div>
+                <div class="collapse" id="extractedTextCollapse">
+                    <div class="card-body">
+                        <div class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85em; white-space: pre-wrap;">${data.analysis.extracted_text}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Build text source info badge
+    let textSourceBadge = '';
+    if (data.analysis?.text_source === 'vision_api') {
+        textSourceBadge = ' <span class="badge bg-primary">Vision API</span>';
+    } else if (data.analysis?.text_source === 'paperless') {
+        textSourceBadge = ' <span class="badge bg-secondary">Paperless OCR</span>';
+    } else if (data.analysis?.text_source === 'pdf_extraction') {
+        textSourceBadge = ' <span class="badge bg-success">PDF Text Extraction</span>';
+    }
+
+    // Build text source info message
+    let textSourceInfo = '';
+    if (data.analysis?.text_source_info) {
+        textSourceInfo = `<div class="small text-muted mt-2"><i class="bi bi-info-circle"></i> ${data.analysis.text_source_info}</div>`;
+    }
+
     modalBody.innerHTML = `
         <h6 class="border-bottom pb-2 mb-3">${t('processing.select_fields_to_apply')}</h6>
         ${metadataFields || `<p class="text-muted">${t('processing.no_suggestions')}</p>`}
 
+        ${extractedTextSection}
+
         <div class="alert alert-info small mt-3 mb-0">
-            <strong>${t('processing.tokens_used')}:</strong> ${data.analysis.tokens_used || 0}
+            <strong>${t('processing.tokens_used')}:</strong> ${data.analysis.tokens_used || 0}${textSourceBadge}
+            ${textSourceInfo}
         </div>
     `;
 
@@ -1013,34 +1287,62 @@ async function applySelectedMetadata() {
 
     const { documentId, metadata } = window.currentDocumentData;
 
-    // Build metadata object with only selected fields
+    // Build metadata object with only selected fields (using edited values)
     const selectedMetadata = {};
 
-    // Check each field
-    if (document.getElementById('apply_title')?.checked && metadata.title) {
-        selectedMetadata.title = metadata.title;
+    // Check each field and read edited value
+    if (document.getElementById('apply_title')?.checked) {
+        const editedValue = document.getElementById('edit_title')?.value;
+        if (editedValue) {
+            selectedMetadata.title = editedValue;
+        }
     }
 
-    if (document.getElementById('apply_document_date')?.checked && metadata.document_date) {
-        selectedMetadata.document_date = metadata.document_date;
+    if (document.getElementById('apply_document_date')?.checked) {
+        const editedValue = document.getElementById('edit_document_date')?.value;
+        if (editedValue) {
+            selectedMetadata.document_date = editedValue;
+        }
     }
 
-    if (document.getElementById('apply_correspondent')?.checked && metadata.correspondent) {
-        selectedMetadata.correspondent = metadata.correspondent;
+    if (document.getElementById('apply_correspondent')?.checked) {
+        const editedValue = document.getElementById('edit_correspondent')?.value;
+        if (editedValue) {
+            selectedMetadata.correspondent = editedValue;
+        }
     }
 
-    if (document.getElementById('apply_document_type')?.checked && metadata.document_type) {
-        selectedMetadata.document_type = metadata.document_type;
+    if (document.getElementById('apply_document_type')?.checked) {
+        const editedValue = document.getElementById('edit_document_type')?.value;
+        if (editedValue) {
+            selectedMetadata.document_type = editedValue;
+        }
     }
 
-    if (document.getElementById('apply_keywords')?.checked && metadata.keywords) {
-        selectedMetadata.keywords = metadata.keywords;
+    if (document.getElementById('apply_storage_path')?.checked) {
+        const editedValue = document.getElementById('edit_storage_path')?.value;
+        if (editedValue) {
+            selectedMetadata.storage_path = editedValue;
+        }
     }
 
-    if (document.getElementById('apply_tags')?.checked && metadata.suggested_tags) {
-        selectedMetadata.suggested_tags = metadata.suggested_tags;
-        // Check if existing tags should be cleared
-        selectedMetadata.clear_existing_tags = document.getElementById('clear_existing_tags')?.checked || false;
+    if (document.getElementById('apply_keywords')?.checked) {
+        const editedValue = document.getElementById('edit_keywords')?.value;
+        if (editedValue) {
+            selectedMetadata.keywords = editedValue;
+        }
+    }
+
+    if (document.getElementById('apply_tags')?.checked) {
+        const tagsSelect = document.getElementById('edit_tags');
+        if (tagsSelect) {
+            const selectedTags = Array.from(tagsSelect.selectedOptions).map(opt => opt.value);
+            if (selectedTags.length > 0) {
+                selectedMetadata.suggested_tags = selectedTags;
+                // Check if existing tags should be cleared
+                selectedMetadata.clear_existing_tags = document.getElementById('clear_existing_tags')?.checked || false;
+            }
+        }
     }
 
     try {
@@ -1185,6 +1487,7 @@ async function loadModularPrompts() {
             document.getElementById('promptDocumentDate').value = prompts.document_date || '';
             document.getElementById('promptCorrespondent').value = prompts.correspondent || '';
             document.getElementById('promptDocumentType').value = prompts.document_type || '';
+            document.getElementById('promptStoragePath').value = prompts.storage_path || '';
             document.getElementById('promptContentKeywords').value = prompts.content_keywords || '';
             document.getElementById('promptSuggestedTitle').value = prompts.suggested_title || '';
             document.getElementById('promptSuggestedTag').value = prompts.suggested_tag || '';
@@ -1207,6 +1510,7 @@ async function loadDefaultModularPrompts() {
             document.getElementById('promptDocumentDate').value = defaults.document_date || '';
             document.getElementById('promptCorrespondent').value = defaults.correspondent || '';
             document.getElementById('promptDocumentType').value = defaults.document_type || '';
+            document.getElementById('promptStoragePath').value = defaults.storage_path || '';
             document.getElementById('promptContentKeywords').value = defaults.content_keywords || '';
             document.getElementById('promptSuggestedTitle').value = defaults.suggested_title || '';
             document.getElementById('promptSuggestedTag').value = defaults.suggested_tag || '';
@@ -1342,6 +1646,7 @@ async function loadSelectedConfiguration() {
             document.getElementById('promptDocumentDate').value = config.document_date || '';
             document.getElementById('promptCorrespondent').value = config.correspondent || '';
             document.getElementById('promptDocumentType').value = config.document_type || '';
+            document.getElementById('promptStoragePath').value = config.storage_path || '';
             document.getElementById('promptContentKeywords').value = config.content_keywords || '';
             document.getElementById('promptSuggestedTitle').value = config.suggested_title || '';
             document.getElementById('promptSuggestedTag').value = config.suggested_tag || '';
@@ -1386,6 +1691,7 @@ async function saveNewConfiguration() {
         document_date: document.getElementById('promptDocumentDate').value,
         correspondent: document.getElementById('promptCorrespondent').value,
         document_type: document.getElementById('promptDocumentType').value,
+        storage_path: document.getElementById('promptStoragePath').value,
         content_keywords: document.getElementById('promptContentKeywords').value,
         suggested_title: document.getElementById('promptSuggestedTitle').value,
         suggested_tag: document.getElementById('promptSuggestedTag').value,
@@ -1446,6 +1752,7 @@ async function updateSelectedConfiguration() {
         document_date: document.getElementById('promptDocumentDate').value,
         correspondent: document.getElementById('promptCorrespondent').value,
         document_type: document.getElementById('promptDocumentType').value,
+        storage_path: document.getElementById('promptStoragePath').value,
         content_keywords: document.getElementById('promptContentKeywords').value,
         suggested_title: document.getElementById('promptSuggestedTitle').value,
         suggested_tag: document.getElementById('promptSuggestedTag').value,
@@ -1566,6 +1873,7 @@ async function runPromptTest() {
             document_date: document.getElementById('promptDocumentDate').value,
             correspondent: document.getElementById('promptCorrespondent').value,
             document_type: document.getElementById('promptDocumentType').value,
+            storage_path: document.getElementById('promptStoragePath').value,
             content_keywords: document.getElementById('promptContentKeywords').value,
             suggested_title: document.getElementById('promptSuggestedTitle').value,
             suggested_tag: document.getElementById('promptSuggestedTag').value,

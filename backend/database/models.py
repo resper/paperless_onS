@@ -104,6 +104,7 @@ class PromptConfiguration(Base):
     document_date = Column(Text, nullable=True)
     correspondent = Column(Text, nullable=True)
     document_type = Column(Text, nullable=True)
+    storage_path = Column(Text, nullable=True)
     content_keywords = Column(Text, nullable=True)
     suggested_title = Column(Text, nullable=True)
     suggested_tag = Column(Text, nullable=True)
